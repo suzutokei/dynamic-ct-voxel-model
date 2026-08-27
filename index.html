@@ -63,7 +63,6 @@ canvas{max-width:100%}
   .title{font-size:20px}
   .huNum{font-size:30px}
   #scene{width:min(100%,320px);height:auto;margin:10px auto 12px}
-  #graph{height:270px}
   .legend{gap:8px}
   .leg{font-size:11px;padding:7px 10px}
   .row{grid-template-columns:1fr}
@@ -73,7 +72,6 @@ canvas{max-width:100%}
   h1{font-size:23px}
   .tab{font-size:13px;padding:9px 8px}
   #scene{width:min(100%,290px)}
-  #graph{height:240px}
   .bigT{font-size:18px}
   .huNum{font-size:28px}
 }
@@ -244,6 +242,61 @@ function drawContrastParticle(ctx,x,y,r=3,alpha=1){
   ctx.beginPath(); ctx.arc(x-r*0.32,y-r*0.36,Math.max(0.7,r*0.28),0,Math.PI*2); ctx.fill();
   ctx.restore();
 }
+function drawClosedSmoothShape(ctx, pts, fill, stroke, width=1, alpha=1){
+  if(!pts || pts.length<3) return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.beginPath();
+  const n=pts.length;
+  for(let i=0;i<n;i++){
+    const p0=pts[i], p1=pts[(i+1)%n];
+    const mx=(p0[0]+p1[0])/2, my=(p0[1]+p1[1])/2;
+    if(i===0) ctx.moveTo(mx,my);
+    else ctx.quadraticCurveTo(p0[0],p0[1],mx,my);
+  }
+  const pLast=pts[n-1], pFirst=pts[0];
+  const mx=(pLast[0]+pFirst[0])/2, my=(pLast[1]+pFirst[1])/2;
+  ctx.quadraticCurveTo(pLast[0],pLast[1],mx,my);
+  ctx.closePath();
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=width; ctx.stroke(); }
+  ctx.restore();
+}
+
+function pointInPolygon(x,y,pts){
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i][0], yi=pts[i][1], xj=pts[j][0], yj=pts[j][1];
+    const intersect=((yi>y)!=(yj>y)) && (x < (xj-xi)*(y-yi)/((yj-yi)||1e-9)+xi);
+    if(intersect) inside=!inside;
+  }
+  return inside;
+}
+
+function makeBlobFromEllipse(e, seed){
+  const R=rng(seed);
+  const n=11 + Math.floor(R()*5);
+  const pts=[];
+  for(let i=0;i<n;i++){
+    const ang=(Math.PI*2*i/n) + (R()-0.5)*0.18;
+    const lobe=1 + 0.12*Math.sin(ang*2 + R()*2) + 0.08*Math.sin(ang*3 + R()*2);
+    const rj=0.82 + R()*0.28;
+    const ex=Math.cos(ang)*e.rx*lobe*rj;
+    const ey=Math.sin(ang)*e.ry*(0.84 + R()*0.24);
+    const rot=(e.rot||0)*Math.PI/180;
+    const x=e.cx + ex*Math.cos(rot)-ey*Math.sin(rot) + (R()-0.5)*4;
+    const y=e.cy + ex*Math.sin(rot)+ey*Math.cos(rot) + (R()-0.5)*4;
+    pts.push([x,y]);
+  }
+  return pts;
+}
+
+function polyCentroid(pts){
+  let x=0,y=0;
+  pts.forEach(p=>{ x+=p[0]; y+=p[1]; });
+  return {x:x/pts.length,y:y/pts.length};
+}
+
 function drawMicroDots(ctx, pts, count, color, rMin, rMax, seed){
   const R=rng(seed);
   for(let i=0;i<count;i++){
@@ -534,9 +587,12 @@ function generateData(){
       {cx:318, cy:356, rx:150, ry:118, rot:-28},
       {cx:514, cy:416, rx:132, ry:100, rot:12}
     ],
+    spaces:[],
     leakVisualSpeed:0.42, leakSpread:1.2, bloodJitter:1.05, bloodTemporal:0.14
   };
   {
+    out.hem.spaces = out.hem.vessels.map((v,i)=>makeBlobFromEllipse(v, 5200+i));
+
     const R=rng(202);
     for(let i=0;i<34;i++){
       const x1=20+R()*460, y1=20+R()*460, x2=20+R()*460, y2=20+R()*460;
@@ -619,6 +675,11 @@ function insideVessel(tp,x,y,m=0){
   if(tp==="hcc"){
     return cfg.hcc.sinusoidPaths.some(pts=>pointNearPath(x,y,pts,4.2+m))
       || cfg.hcc.vessels.some(v=>ptInEllipse(x,y,v,m));
+  }
+  if(tp==="hem"){
+    if(m<=0) return cfg.hem.spaces.some(sp=>pointInPolygon(x,y,sp));
+    // For margin queries, keep a forgiving scaffold based on the original ellipses
+    return cfg.hem.vessels.some(v=>ptInEllipse(x,y,v,m));
   }
   return cfg[tp].vessels.some(v=>ptInEllipse(x,y,v,m));
 }
@@ -787,7 +848,6 @@ function wallStart(tp,idx,R){
       nx*=sign; ny*=sign;
 
       const inner = {x:p[0] + nx*1.0, y:p[1] + ny*1.0};
-      // Search for the first valid EES point immediately outside the sinusoid.
       for(const d of [4.8,5.5,6.3,7.2,8.2]){
         const outer={x:p[0]+nx*d,y:p[1]+ny*d};
         if(validEES(tp,outer.x,outer.y)){
@@ -796,6 +856,22 @@ function wallStart(tp,idx,R){
       }
     }
     return {mode:"path",a:0,v:null,x:250,y:250,vx:246,vy:250,nx:1,ny:0};
+  }
+
+  if(tp==="hem"){
+    const sp = cfg.hem.spaces[idx % cfg.hem.spaces.length];
+    const c = polyCentroid(sp);
+    for(let k=0;k<160;k++){
+      const j=Math.floor(R()*sp.length);
+      const p=sp[j];
+      let dx=p[0]-c.x, dy=p[1]-c.y;
+      const len=Math.hypot(dx,dy) || 1;
+      dx/=len; dy/=len;
+      for(const d of [4,7,10,13]){
+        const ox=p[0]+dx*d, oy=p[1]+dy*d;
+        if(validEES(tp,ox,oy)) return {mode:"poly", a:Math.atan2(dy,dx), v:null, x:ox, y:oy, vx:p[0]-dx*2, vy:p[1]-dy*2};
+      }
+    }
   }
 
   const v = cfg[tp].vessels[idx % cfg[tp].vessels.length];
@@ -890,16 +966,19 @@ function drawBackground(tp){
     sctx.fillStyle="rgba(252,238,242,1)";
     sctx.fillRect(10,10,480,480);
 
-    // Thin fibrous septa
-    cfg.hem.septa.forEach((seg,idx)=>{
-      pathStroke(sctx, seg, 6.5, "rgba(246,236,239,0.52)", 1);
-      pathStroke(sctx, seg, 1.1, "rgba(213,178,188,0.42)", 1);
-      drawSeptalNucleiOnPath(sctx, seg, 6, 9200+idx);
+    // Irregular cavernous vascular spaces
+    cfg.hem.spaces.forEach((sp,idx)=>{
+      drawClosedSmoothShape(sctx, sp, "rgba(244,194,201,0.90)", "rgba(186,92,108,0.34)", 0.9, 1);
+      const c=polyCentroid(sp);
+      const inner=sp.map(([x,y])=>[c.x + (x-c.x)*0.90, c.y + (y-c.y)*0.90]);
+      drawClosedSmoothShape(sctx, inner, "rgba(248,206,212,0.93)", "rgba(229,170,180,0.14)", 0.35, 1);
     });
 
-    cfg.hem.vessels.forEach(v=>{
-      rotEllipse(sctx, v, "rgba(244,194,201,0.92)", "rgba(190,92,109,0.42)", 0.9, 1);
-      rotEllipse(sctx, {cx:v.cx,cy:v.cy,rx:Math.max(1,v.rx-4.0),ry:Math.max(1,v.ry-4.0),rot:v.rot}, "rgba(248,207,212,0.95)", "rgba(229,170,180,0.18)", 0.35, 1);
+    // Thin fibrous septa
+    cfg.hem.septa.forEach((seg,idx)=>{
+      pathStroke(sctx, seg, 6.2, "rgba(246,236,239,0.54)", 1);
+      pathStroke(sctx, seg, 1.0, "rgba(213,178,188,0.40)", 1);
+      drawSeptalNucleiOnPath(sctx, seg, 6, 9200+idx);
     });
 
     // a few additional inter-septal stromal nuclei
@@ -981,7 +1060,7 @@ function drawParticles(tp){
     const lp=leakPools[tp][i % leakPools[tp].length];
     const v=lp.st.v, a=lp.st.a;
     let p0, p1;
-    if(lp.st.mode==="path"){
+    if(lp.st.mode==="path" || lp.st.mode==="poly"){
       p0 = {x:lp.st.vx, y:lp.st.vy};
       p1 = {x:lp.st.x, y:lp.st.y};
     }else{
@@ -1015,9 +1094,30 @@ function drawScene(){
   return drawParticles(type);
 }
 
+function resizeGraphCanvas(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const cssW=Math.max(300,Math.floor(graph.getBoundingClientRect().width||760));
+  const compact=cssW<520;
+  const cssH=compact ? 270 : 340;
+
+  graph.style.height=cssH+"px";
+
+  const bw=Math.round(cssW*dpr);
+  const bh=Math.round(cssH*dpr);
+  if(graph.width!==bw || graph.height!==bh){
+    graph.width=bw;
+    graph.height=bh;
+  }
+  gctx.setTransform(dpr,0,0,dpr,0,0);
+  return {W:cssW,H:cssH,compact};
+}
+
 function drawGraph(){
-  const W=760,H=340,L=74,R=28,T=30,B=48,min=35,max=175;
+  const dims=resizeGraphCanvas();
+  const W=dims.W,H=dims.H,compact=dims.compact;
+  const L=compact?58:74, R=compact?14:28, T=30, B=48, min=35, max=175;
   const X=x=>L+x/300*(W-L-R), Y=y=>T+(max-y)/(max-min)*(H-T-B);
+
   gctx.clearRect(0,0,W,H);
   gctx.fillStyle="#ffffff";
   gctx.fillRect(0,0,W,H);
@@ -1047,9 +1147,10 @@ function drawGraph(){
     gctx.stroke();
 
     gctx.fillStyle="#475569";
-    gctx.font="600 12px sans-serif";
+    gctx.font="600 12px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
     gctx.textAlign="right";
-    gctx.fillText(String(v), L-12, y+4);
+    gctx.textBaseline="alphabetic";
+    gctx.fillText(String(v), L-10, y+4);
   });
 
   [0,50,100,150,200,250,300].forEach(v=>{
@@ -1062,8 +1163,9 @@ function drawGraph(){
     gctx.stroke();
 
     gctx.fillStyle="#475569";
-    gctx.font="600 12px sans-serif";
+    gctx.font="600 12px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
     gctx.textAlign="center";
+    gctx.textBaseline="alphabetic";
     gctx.fillText(String(v), x, H-14);
   });
 
@@ -1076,14 +1178,14 @@ function drawGraph(){
   gctx.stroke();
 
   gctx.fillStyle="#334155";
-  gctx.font="700 13px sans-serif";
+  gctx.font="700 13px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
   gctx.textAlign="left";
-  gctx.fillText("CT値（HU）", 18, 20);
+  gctx.fillText("CT値（HU）", compact?8:18, 20);
   gctx.textAlign="right";
   gctx.fillText("時間（秒）", W-R, H-14);
 
   gctx.fillStyle="#475569";
-  gctx.font="700 11px sans-serif";
+  gctx.font=(compact?"700 10px ":"700 11px ")+"-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
   gctx.textAlign="center";
   gctx.fillText("動脈相", (X(0)+X(40))/2, T+15);
   gctx.fillText("門脈相", (X(40)+X(100))/2, T+15);
@@ -1098,8 +1200,8 @@ function drawGraph(){
     for(let x=0;x<=300;x+=2) pts.push([X(x), Y(hu(tp,x))]);
     gctx.save();
     gctx.strokeStyle=colors[tp];
-    gctx.lineWidth = tp===type ? 4.8 : (tp==="liver" ? 3.2 : 3.5);
-    gctx.setLineDash(tp==="liver" ? [10,6] : []);
+    gctx.lineWidth = tp===type ? 4.4 : (tp==="liver" ? 2.8 : 3.2);
+    gctx.setLineDash(tp==="liver" ? [9,6] : []);
     gctx.globalAlpha = tp===type ? 1 : 0.94;
     gctx.lineCap="round";
     gctx.lineJoin="round";
@@ -1111,7 +1213,7 @@ function drawGraph(){
   const cx=X(time), cy=Y(hu(type,time));
   gctx.save();
   gctx.strokeStyle="#94a3b8";
-  gctx.lineWidth=1.5;
+  gctx.lineWidth=1.4;
   gctx.setLineDash([4,4]);
   gctx.beginPath();
   gctx.moveTo(cx,T);
@@ -1119,7 +1221,7 @@ function drawGraph(){
   gctx.stroke();
   gctx.restore();
 
-  circle(gctx,cx,cy,6.2,"#2563eb",1,"#ffffff",2.2);
+  circle(gctx,cx,cy,compact?5.4:6.2,"#2563eb",1,"#ffffff",2.0);
 }
 
 function update(){
@@ -1169,6 +1271,7 @@ document.getElementById("reset").addEventListener("click",()=>{
   update();
 });
 slider.addEventListener("input",()=>{ time=Number(slider.value); update(); });
+window.addEventListener("resize",()=>drawGraph());
 
 update();
 })();
