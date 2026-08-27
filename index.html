@@ -1,0 +1,1177 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ダイナミック造影CT 1ボクセルモデル</title>
+<style>
+:root{
+  --bg:#f4f6f9; --panel:#ffffff; --line:#e5e7eb; --text:#1f2937; --muted:#6b7280;
+  --blue:#2563eb; --blue-soft:#dbeafe; --red:#dc2626; --green:#059669; --purple:#7c3aed; --gray:#6b7280;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic UI",Roboto,sans-serif;font-size:15px}
+.wrap{max-width:1220px;margin:0 auto;padding:18px}
+.head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:32px;line-height:1.2;margin:0;font-weight:900;letter-spacing:.01em}
+.sub{margin-top:6px;color:var(--muted);font-size:13px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 10px;font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tab{background:#fff;border:1px solid var(--line);border-radius:999px;padding:11px 18px;font-size:15px;font-weight:800;cursor:pointer}
+.tab.active{background:var(--blue-soft);border-color:#bcd1fb;color:#1849b6}
+.grid{display:grid;grid-template-columns:400px minmax(0,1fr);gap:16px}
+.card{background:#fff;border:1px solid #e7ebf0;border-radius:20px;box-shadow:0 14px 34px rgba(15,23,42,.07);overflow:hidden}
+.cardIn{padding:16px}
+.head2{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.title{font-size:22px;font-weight:900;line-height:1.2;margin-top:2px}
+.note{font-size:13px;line-height:1.5;color:var(--muted);margin-top:4px}
+.hu{text-align:right}
+.huNum{font-size:34px;font-weight:900;line-height:1}
+.huLab{font-size:12px;color:var(--muted);margin-top:3px;font-weight:700}
+#scene{display:block;width:300px;height:300px;margin:12px auto 12px;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(15,23,42,.04),0 8px 22px rgba(15,23,42,.06)}
+.stat{border:1px solid var(--line);background:#fafbfc;border-radius:14px;padding:12px;text-align:center}
+.stat .s1{font-size:13px;color:var(--muted);font-weight:700}
+.stat .s2{font-size:31px;font-weight:900;line-height:1.1}
+.stat .s3{font-size:11px;color:var(--muted);margin-top:6px}
+#graph{display:block;width:100%;height:340px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.leg{display:inline-flex;align-items:center;gap:8px;border:1px solid #e5e7eb;border-radius:999px;background:#fff;padding:8px 12px;font-size:12px;font-weight:700;color:#334155;box-shadow:0 1px 0 rgba(15,23,42,.02)}
+.sw{width:20px;height:4px;border-radius:99px}
+.ctrlCard{margin-top:14px}
+.row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center}
+.rangeHead{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;margin-bottom:6px}
+.bigT{font-size:20px;font-weight:900;color:var(--text)}
+input[type=range]{width:100%}
+.btn{min-width:92px;min-height:46px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:14px;font-weight:800;cursor:pointer}
+.btn.primary{background:var(--blue-soft);border-color:#bcd1fb;color:#1849b6}
+.desc{display:none}
+canvas{max-width:100%}
+@media (max-width:900px){
+  .grid{grid-template-columns:1fr}
+  .wrap{padding:12px}
+}
+@media (max-width:700px){
+  body{font-size:16px}
+  .wrap{padding:10px}
+  .head{margin-bottom:14px}
+  h1{font-size:26px;line-height:1.25}
+  .tabs{gap:6px;margin-bottom:10px}
+  .tab{flex:1 1 calc(33.333% - 6px);min-width:0;padding:10px 12px;font-size:14px}
+  .cardIn{padding:14px}
+  .title{font-size:20px}
+  .huNum{font-size:30px}
+  #scene{width:min(100%,320px);height:auto;margin:10px auto 12px}
+  #graph{height:270px}
+  .legend{gap:8px}
+  .leg{font-size:11px;padding:7px 10px}
+  .row{grid-template-columns:1fr}
+  .btn{width:100%;min-height:48px}
+}
+@media (max-width:420px){
+  h1{font-size:23px}
+  .tab{font-size:13px;padding:9px 8px}
+  #scene{width:min(100%,290px)}
+  #graph{height:240px}
+  .bigT{font-size:18px}
+  .huNum{font-size:28px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>ダイナミック造影CT 1ボクセルモデル</h1>
+      
+    </div>
+
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-type="hcc">肝細胞癌</button>
+    <button class="tab" data-type="hem">肝血管腫</button>
+    <button class="tab" data-type="ccc">肝内胆管癌</button>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <div class="cardIn">
+        <div class="head2">
+          <div>
+            
+            <div id="title" class="title">肝細胞癌</div>
+            
+          </div>
+          <div class="hu">
+            <div id="huNum" class="huNum">40</div>
+            <div class="huLab">CT値（HU）</div>
+          </div>
+        </div>
+        <canvas id="scene" width="500" height="500"></canvas>
+<div class="stat">
+          <div class="s1">ボクセル内造影剤粒子数</div>
+          <div><span id="count" class="s2">0</span> <span style="font-size:14px;color:var(--muted)">個</span></div>
+          
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="cardIn">
+        <div class="head2">
+          <div>
+            
+            <div class="title">造影曲線</div>
+            
+          </div>
+          <div class="pill"><span id="phase">造影前</span></div>
+        </div>
+        <canvas id="graph" width="760" height="340"></canvas>
+        <div class="legend">
+          <div class="leg"><span class="sw" style="background:var(--red)"></span>肝細胞癌</div>
+          <div class="leg"><span class="sw" style="background:var(--green)"></span>肝血管腫</div>
+          <div class="leg"><span class="sw" style="background:var(--purple)"></span>胆管癌</div>
+          <div class="leg"><span class="sw" style="background:var(--gray)"></span>正常肝実質</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card ctrlCard">
+    <div class="cardIn">
+      <div class="row">
+        <div>
+          <div class="rangeHead"><span>時間</span><span id="timeText" class="bigT">0秒</span></div>
+          <input id="slider" type="range" min="0" max="300" step="1" value="0">
+        </div>
+        <button id="play" class="btn primary">▶︎ 再生</button>
+        <button id="reset" class="btn">リセット</button>
+      </div>
+      
+    </div>
+  </section>
+</div>
+
+<script>
+(()=>{"use strict";
+const scene = document.getElementById("scene");
+const graph = document.getElementById("graph");
+const sctx = scene.getContext("2d");
+const gctx = graph.getContext("2d");
+const slider = document.getElementById("slider");
+const BASE_HU = 40;
+let type = "hcc", time = 0, playing = false, last = 0, raf = 0;
+
+const phase = t => t<8 ? "造影前" : t<40 ? "動脈相" : t<100 ? "門脈相" : t<180 ? "平衡相" : "遅延相";
+const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
+function rng(seed){let s=seed>>>0; return ()=>((s=Math.imul(1664525,s)+1013904223>>>0)/4294967296);}
+function n4(R){return (R()+R()+R()+R()-2)*1.1;}
+function smooth01(x){x=clamp(x,0,1); return x*x*(3-2*x);}
+function curve(points,t){
+  if(t<=points[0][0]) return points[0][1];
+  for(let i=0;i<points.length-1;i++){
+    const [t0,v0]=points[i], [t1,v1]=points[i+1];
+    if(t<=t1){ const q=smooth01((t-t0)/(t1-t0)); return v0+(v1-v0)*q; }
+  }
+  return points[points.length-1][1];
+}
+
+const particleCurves = {
+  hcc:[[0,0],[8,5],[30,80],[80,60],[180,52],[300,49]],
+  hem:[[0,0],[8,8],[32,125],[100,105],[180,95],[300,85]],
+  ccc:[[0,0],[8,2],[30,15],[80,32],[180,58],[300,68]],
+  liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
+};
+const bloodFracCurves = {
+  hcc:[[0,1],[30,0.96],[80,0.92],[180,0.86],[300,0.82]],
+  hem:[[0,1],[30,0.998],[100,0.995],[300,0.985]],
+  ccc:[[0,1],[30,0.55],[80,0.24],[180,0.12],[300,0.08]]
+};
+const totalParticleValue = (tp,t)=>curve(particleCurves[tp],t);
+const bloodParticleValue = (tp,t)=>totalParticleValue(tp,t)*curve(bloodFracCurves[tp],t);
+const totalParticles = (tp,t)=>Math.round(totalParticleValue(tp,t));
+const bloodParticles = (tp,t)=>Math.round(bloodParticleValue(tp,t));
+const eesParticles = (tp,t)=>Math.max(0,totalParticles(tp,t)-bloodParticles(tp,t));
+const hu = (tp,t)=>BASE_HU + totalParticleValue(tp,t);
+
+function ptInEllipse(x,y,e,margin=0){
+  const a=-(e.rot||0)*Math.PI/180, dx=x-e.cx, dy=y-e.cy;
+  const xx=dx*Math.cos(a)-dy*Math.sin(a);
+  const yy=dx*Math.sin(a)+dy*Math.cos(a);
+  const rx=e.rx+margin, ry=e.ry+margin;
+  return (xx*xx)/(rx*rx)+(yy*yy)/(ry*ry)<=1;
+}
+function ellipseBoundary(e, ang, delta=0){
+  const rx=e.rx+delta, ry=e.ry+delta, rot=(e.rot||0)*Math.PI/180;
+  const ex=Math.cos(ang)*rx, ey=Math.sin(ang)*ry;
+  return {
+    x:e.cx + ex*Math.cos(rot)-ey*Math.sin(rot),
+    y:e.cy + ex*Math.sin(rot)+ey*Math.cos(rot)
+  };
+}
+function rotEllipse(ctx,e,fill,stroke,width=1,alpha=1){
+  ctx.save(); ctx.translate(e.cx,e.cy); ctx.rotate((e.rot||0)*Math.PI/180); ctx.globalAlpha=alpha;
+  ctx.beginPath(); ctx.ellipse(0,0,e.rx,e.ry,0,0,Math.PI*2);
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=width; ctx.stroke(); }
+  ctx.restore();
+}
+function circle(ctx,x,y,r,fill,alpha=1,stroke=null,width=1){
+  ctx.save(); ctx.globalAlpha=alpha;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=width; ctx.stroke(); }
+  ctx.restore();
+}
+
+function drawContrastParticle(ctx,x,y,r=3,alpha=1){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  const grd=ctx.createRadialGradient(x,y,0,x,y,r*2.4);
+  grd.addColorStop(0,"rgba(59,130,246,0.24)");
+  grd.addColorStop(1,"rgba(59,130,246,0)");
+  ctx.fillStyle=grd;
+  ctx.beginPath(); ctx.arc(x,y,r*2.4,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle="rgba(255,255,255,0.98)";
+  ctx.beginPath(); ctx.arc(x,y,r+1.15,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle="#2563eb";
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle="#1d4ed8"; ctx.lineWidth=0.8; ctx.stroke();
+  ctx.fillStyle="rgba(255,255,255,0.85)";
+  ctx.beginPath(); ctx.arc(x-r*0.32,y-r*0.36,Math.max(0.7,r*0.28),0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawMicroDots(ctx, pts, count, color, rMin, rMax, seed){
+  const R=rng(seed);
+  for(let i=0;i<count;i++){
+    const j=Math.floor(R()*(pts.length-1));
+    const p1=pts[j], p2=pts[Math.min(j+1, pts.length-1)];
+    const q=R();
+    const x=p1[0]*(1-q)+p2[0]*q + (R()-0.5)*10;
+    const y=p1[1]*(1-q)+p2[1]*q + (R()-0.5)*6;
+    circle(ctx,x,y,rMin+R()*(rMax-rMin),color,0.55);
+  }
+}
+
+function drawHCCCell(ctx,x,y,r,seed){
+  const R=rng(seed);
+  ctx.save();
+  ctx.beginPath();
+  const nPts=7+Math.floor(R()*3);
+  for(let i=0;i<nPts;i++){
+    const a=(Math.PI*2*i/nPts)+(R()-0.5)*0.42;
+    const rr=r*(0.78+R()*0.42);
+    const px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.closePath();
+  ctx.fillStyle="rgba(237,171,190,0.84)";
+  ctx.fill();
+  ctx.strokeStyle="rgba(187,118,142,0.52)";
+  ctx.lineWidth=0.75;
+  ctx.stroke();
+
+  const pleo = R();
+  const nucR = r*(pleo<0.18 ? 0.46+R()*0.12 : 0.26+R()*0.12);
+  const nx=x+(R()-0.5)*1.8, ny=y+(R()-0.5)*1.8;
+  circle(ctx,nx,ny,nucR,"rgba(87,50,110,0.90)");
+  if(pleo>0.90){
+    circle(ctx,x+(R()-0.5)*3.2,y+(R()-0.5)*3.2,r*0.18,"rgba(104,64,126,0.72)");
+  }
+  if(pleo<0.14){
+    circle(ctx,nx-nucR*0.24,ny-nucR*0.28,Math.max(0.7,nucR*0.24),"rgba(255,255,255,0.22)");
+  }
+  ctx.restore();
+}
+
+function drawSeptalNucleiOnPath(ctx, pts, count, seed){
+  const R=rng(seed);
+  for(let i=0;i<count;i++) {
+    const j=Math.floor(R()*(pts.length-1));
+    const p1=pts[j], p2=pts[Math.min(j+1, pts.length-1)];
+    const q=R();
+    const x=p1[0]*(1-q)+p2[0]*q;
+    const y=p1[1]*(1-q)+p2[1]*q;
+    const ang=Math.atan2(p2[1]-p1[1], p2[0]-p1[0])*180/Math.PI + (R()-0.5)*18;
+    const off=(R()-0.5)*7;
+    const dx=Math.cos((ang+90)*Math.PI/180)*off;
+    const dy=Math.sin((ang+90)*Math.PI/180)*off;
+    rotEllipse(ctx,{cx:x+dx,cy:y+dy,rx:3.4+R()*1.3,ry:1.25+R()*0.5,rot:ang},"rgba(96,58,116,0.46)",null,0,1);
+  }
+}
+
+function drawCCCGland(ctx,x,y,r,seed){
+  const R=rng(seed);
+  const rot=(R()-0.5)*180;
+  const rx=r*(1.10+R()*0.50), ry=r*(0.78+R()*0.32);
+
+  // subtle desmoplastic halo
+  rotEllipse(
+    ctx,
+    {cx:x,cy:y,rx:rx+5.8,ry:ry+4.6,rot},
+    "rgba(236,208,217,0.15)",
+    null,0,1
+  );
+
+  // glandular epithelial wall
+  rotEllipse(
+    ctx,
+    {cx:x,cy:y,rx:rx+2.4,ry:ry+2.0,rot},
+    "rgba(233,175,192,0.74)",
+    "rgba(181,111,136,0.58)",
+    0.9,1
+  );
+
+  // clearly open lumen
+  rotEllipse(
+    ctx,
+    {cx:x,cy:y,rx:Math.max(2.0,rx*0.68),ry:Math.max(1.6,ry*0.64),rot},
+    "rgba(255,253,253,0.995)",
+    "rgba(225,205,212,0.58)",
+    0.55,1
+  );
+
+  // epithelial nuclei distributed around the lumen
+  const n=6+Math.floor(R()*4);
+  for(let i=0;i<n;i++){
+    const a=(Math.PI*2*i/n)+(R()-0.5)*0.22;
+    const rrX=rx+1.5, rrY=ry+1.2;
+    const ex=Math.cos(a)*rrX, ey=Math.sin(a)*rrY;
+    const ang=rot*Math.PI/180;
+    const px=x + ex*Math.cos(ang)-ey*Math.sin(ang);
+    const py=y + ex*Math.sin(ang)+ey*Math.cos(ang);
+    rotEllipse(
+      ctx,
+      {
+        cx:px,cy:py,
+        rx:1.8+R()*0.55,
+        ry:0.95+R()*0.35,
+        rot:rot+a*180/Math.PI
+      },
+      "rgba(91,53,112,0.78)",
+      null,0,1
+    );
+  }
+}
+
+function polyCell(ctx,x,y,r,seed){
+  const R=rng(seed);
+  ctx.save();
+  ctx.beginPath();
+  for(let i=0;i<8;i++){
+    const a=(Math.PI*2*i/8)+(R()-0.5)*0.35;
+    const rr=r*(0.82+R()*0.35);
+    const px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.closePath();
+  ctx.fillStyle="rgba(238,178,194,0.82)";
+  ctx.fill();
+  ctx.strokeStyle="rgba(194,128,148,0.48)";
+  ctx.lineWidth=0.8;
+  ctx.stroke();
+  circle(ctx,x+(R()-0.5)*2,y+(R()-0.5)*2,r*0.30,"rgba(92,54,112,0.88)");
+  ctx.restore();
+}
+function pathStroke(ctx, pts, width, color, alpha=1){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.strokeStyle=color;
+  ctx.lineWidth=width;
+  ctx.lineCap="round";
+  ctx.lineJoin="round";
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length-2;i++){
+    const xc=(pts[i][0]+pts[i+1][0])/2;
+    const yc=(pts[i][1]+pts[i+1][1])/2;
+    ctx.quadraticCurveTo(pts[i][0],pts[i][1],xc,yc);
+  }
+  const n=pts.length;
+  ctx.quadraticCurveTo(pts[n-2][0],pts[n-2][1],pts[n-1][0],pts[n-1][1]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function pointNearPath(x,y,pts,r){
+  const rr=r*r;
+  for(let i=0;i<pts.length-1;i++){
+    const x1=pts[i][0], y1=pts[i][1], x2=pts[i+1][0], y2=pts[i+1][1];
+    const dx=x2-x1, dy=y2-y1;
+    const len2=dx*dx+dy*dy || 1;
+    let t=((x-x1)*dx + (y-y1)*dy)/len2;
+    t=Math.max(0,Math.min(1,t));
+    const px=x1+t*dx, py=y1+t*dy;
+    const ddx=x-px, ddy=y-py;
+    if(ddx*ddx + ddy*ddy <= rr) return true;
+  }
+  return false;
+}
+
+function smoothCurve(ctx, pts){
+  if(!pts || pts.length===0) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  if(pts.length===1) return;
+  if(pts.length===2){
+    ctx.lineTo(pts[1][0], pts[1][1]);
+    return;
+  }
+  for(let i=0;i<pts.length-1;i++){
+    const p0 = pts[i===0 ? i : i-1];
+    const p1 = pts[i];
+    const p2 = pts[i+1];
+    const p3 = pts[i+2 < pts.length ? i+2 : i+1];
+    const cp1x = p1[0] + (p2[0]-p0[0]) / 6;
+    const cp1y = p1[1] + (p2[1]-p0[1]) / 6;
+    const cp2x = p2[0] - (p3[0]-p1[0]) / 6;
+    const cp2y = p2[1] - (p3[1]-p1[1]) / 6;
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2[0], p2[1]);
+  }
+}
+
+function generateData(){
+  const out={};
+
+  // HCC: clearer trabecular plates separated by sinusoid-like vascular channels
+  out.hcc = {
+    title:"肝細胞癌",
+    subtitle:"",
+    desc:"",
+    cells:[],
+    trabeculae:[],
+    sinusoidPaths:[],
+    vessels:[],
+    leakVisualSpeed:0.58, leakSpread:1.55, bloodJitter:0.55, bloodTemporal:0.20
+  };
+  {
+    const R=rng(101);
+
+    // Irregular trabecular bands
+    const bandYs=[50,102,160,222,294,370,446];
+    bandYs.forEach((baseY,bi)=>{
+      const pts=[];
+      const amp = 8 + R()*10;
+      const period = 58 + R()*28;
+      for(let x=-36;x<=536;x+=22){
+        const y = baseY + Math.sin((x/period)+(bi*0.72))*amp + (R()-0.5)*9;
+        pts.push([x,y]);
+      }
+      out.hcc.trabeculae.push(pts);
+
+      if(bi<bandYs.length-1){
+        const pts2=[];
+        const amp2 = 9 + R()*10;
+        const period2 = 64 + R()*26;
+        for(let x=-42;x<=542;x+=26){
+          const y = baseY+28 + Math.sin((x/period2)+(bi*0.88)+0.5)*amp2 + (R()-0.5)*8;
+          pts2.push([x,y]);
+        }
+        out.hcc.sinusoidPaths.push(pts2);
+
+        // Use only a few elongated sinusoid segments.
+        // They follow the local course of the sinusoid and are NOT vertically aligned.
+        const picks = [];
+        const nPick = 0;
+        for(let m=0;m<nPick;m++){
+          let j = 2 + Math.floor(R()*(pts2.length-4));
+          if(picks.some(v=>Math.abs(v-j)<4)) j = Math.min(pts2.length-3, j+4);
+          picks.push(j);
+
+          const p0=pts2[Math.max(0,j-1)];
+          const p1=pts2[Math.min(pts2.length-1,j+1)];
+          const p=pts2[j];
+          const ang=Math.atan2(p1[1]-p0[1],p1[0]-p0[0])*180/Math.PI;
+
+          out.hcc.vessels.push({
+            cx:p[0]+(R()-0.5)*5,
+            cy:p[1]+(R()-0.5)*4,
+            rx:30+R()*20,
+            ry:3.6+R()*2.2,
+            rot:ang+(R()-0.5)*10
+          });
+        }
+      }
+    });
+
+    // Denser but smaller cells to give a more realistic HCC texture
+    out.hcc.trabeculae.forEach((pts,bi)=>{
+      for(let i=0;i<pts.length-1;i++){
+        const [x,y]=pts[i];
+        const copies = 2 + ((i+bi)%4===0 ? 2 : ((i+bi)%2===0 ? 1 : 0)); // variable 2-4 cell-thick
+        for(let k=0;k<copies;k++){
+          const off = (k-(copies-1)/2)*11;
+          out.hcc.cells.push({
+            x:x+(R()-0.5)*6.0,
+            y:y+off+(R()-0.5)*5.3,
+            r:5.8+R()*2.4,
+            seed:Math.floor(R()*1e9)
+          });
+        }
+      }
+    });
+  }
+
+  // Hemangioma: irregular cavernous blood spaces filling voxel
+  out.hem = {
+    title:"肝血管腫",
+    subtitle:"",
+    desc:"",
+    septa:[],
+    vessels:[
+      {cx:-34, cy:86, rx:126, ry:92, rot:-16},
+      {cx:130, cy:18, rx:118, ry:84, rot:18},
+      {cx:314, cy:62, rx:154, ry:94, rot:-8},
+      {cx:508, cy:66, rx:128, ry:90, rot:24},
+      {cx:48, cy:228, rx:150, ry:98, rot:27},
+      {cx:246, cy:188, rx:120, ry:146, rot:-24},
+      {cx:438, cy:222, rx:162, ry:96, rot:10},
+      {cx:-26, cy:396, rx:130, ry:108, rot:-10},
+      {cx:124, cy:436, rx:136, ry:94, rot:22},
+      {cx:318, cy:356, rx:150, ry:118, rot:-28},
+      {cx:514, cy:416, rx:132, ry:100, rot:12}
+    ],
+    leakVisualSpeed:0.42, leakSpread:1.2, bloodJitter:1.05, bloodTemporal:0.14
+  };
+  {
+    const R=rng(202);
+    for(let i=0;i<34;i++){
+      const x1=20+R()*460, y1=20+R()*460, x2=20+R()*460, y2=20+R()*460;
+      out.hem.septa.push([[x1,y1],[(x1+x2)/2+(R()-0.5)*60,(y1+y2)/2+(R()-0.5)*60],[x2,y2]]);
+    }
+  }
+
+  // CCC: abundant desmoplastic stroma with coherent collagen bundles
+  out.ccc = {
+    title:"胆管癌（線維性間質）",
+    subtitle:"",
+    desc:"",
+    fibrosis:[],
+    fibroNuclei:[],
+    glands:[],
+    vessels:[
+      {cx:124, cy:112, rx:18, ry:12, rot:18},
+      {cx:360, cy:302, rx:21, ry:13, rot:-12},
+      {cx:270, cy:154, rx:16, ry:10, rot:31},
+      {cx:150, cy:360, rx:15, ry:10, rot:-22}
+    ],
+    leakVisualSpeed:1.30, leakSpread:5.8, bloodJitter:0.82, bloodTemporal:0.14
+  };
+  {
+    const R=rng(303);
+
+    // Long, gently curving collagen bundles with coherent local orientation
+    const families=[
+      {angle:-0.30, count:9, width:[5,10]},
+      {angle: 0.22, count:7, width:[4,8]},
+      {angle: 0.78, count:4, width:[3,6]}
+    ];
+
+    families.forEach((fam,fi)=>{
+      for(let j=0;j<fam.count;j++){
+        const pts=[];
+        let x = -40 + R()*120;
+        let y = 35 + R()*430;
+        const len = 520 + R()*120;
+        const steps = 8;
+        for(let k=0;k<steps;k++){
+          const q=k/(steps-1);
+          const bend=Math.sin(q*Math.PI*2 + R()*1.5)*18;
+          const px = x + Math.cos(fam.angle)*len*q - Math.sin(fam.angle)*bend;
+          const py = y + Math.sin(fam.angle)*len*q + Math.cos(fam.angle)*bend;
+          pts.push([px,py]);
+        }
+        out.ccc.fibrosis.push({
+          pts,
+          w:fam.width[0] + R()*(fam.width[1]-fam.width[0]),
+          alpha:0.30 + R()*0.22
+        });
+      }
+    });
+
+    // Spindle fibroblast nuclei aligned with collagen
+    for(let i=0;i<85;i++){
+      const a = (i%3===0 ? -0.30 : (i%3===1 ? 0.22 : 0.78)) + (R()-0.5)*0.18;
+      out.ccc.fibroNuclei.push({
+        x:22+R()*456, y:22+R()*456,
+        rx:4.0+R()*2.5, ry:1.4+R()*0.8,
+        rot:a*180/Math.PI
+      });
+    }
+
+    // Sparse tumor/glandular elements
+    for(let i=0;i<24;i++){
+      out.ccc.glands.push({
+        x:36+R()*428, y:36+R()*428,
+        r:5.5+R()*3.0, seed:Math.floor(R()*1e9)
+      });
+    }
+  }
+
+  return out;
+}
+const cfg = generateData();
+
+function insideVessel(tp,x,y,m=0){
+  if(tp==="hcc"){
+    return cfg.hcc.sinusoidPaths.some(pts=>pointNearPath(x,y,pts,4.2+m))
+      || cfg.hcc.vessels.some(v=>ptInEllipse(x,y,v,m));
+  }
+  return cfg[tp].vessels.some(v=>ptInEllipse(x,y,v,m));
+}
+function insideCell(tp,x,y){
+  if(tp==="hcc") return cfg.hcc.cells.some(c=>((x-c.x)**2+(y-c.y)**2) < ((c.r+2)**2));
+  if(tp==="ccc") return cfg.ccc.glands.some(c=>((x-c.x)**2+(y-c.y)**2) < ((c.r+4)**2));
+  return false;
+}
+function validEES(tp,x,y){
+  return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,4)&&!insideCell(tp,x,y);
+}
+
+function randomPointInVessel(tp,R){
+  for(let k=0;k<4000;k++){
+    const x=18+R()*464, y=18+R()*464;
+    if(insideVessel(tp,x,y)) return [x,y];
+  }
+  return [250,250];
+}
+function sampleVisiblePathAtU(pts,u){
+  let i0=0, i1=pts.length-1;
+  while(i0<pts.length-2 && pts[i0][0] < 18) i0++;
+  while(i1>1 && pts[i1][0] > 482) i1--;
+  if(i1<=i0+1){ i0=0; i1=pts.length-1; }
+
+  const uu=((u%1)+1)%1;
+  const z=i0 + uu*(i1-i0);
+  const j=Math.min(i1-1,Math.floor(z));
+  const q=z-j;
+  const p0=pts[j], p1=pts[j+1];
+  const x=p0[0]*(1-q)+p1[0]*q;
+  const y=p0[1]*(1-q)+p1[1]*q;
+
+  const jm=Math.max(i0,j-1), jp=Math.min(i1,j+2);
+  const dx=pts[jp][0]-pts[jm][0], dy=pts[jp][1]-pts[jm][1];
+  const len=Math.hypot(dx,dy)||1;
+  return {x,y,ux:dx/len,uy:dy/len,nx:-dy/len,ny:dx/len};
+}
+
+function samplePathAtU(pts,u){
+  const uu=((u%1)+1)%1;
+  const z=uu*(pts.length-1);
+  const j=Math.min(pts.length-2,Math.floor(z));
+  const q=z-j;
+  const p0=pts[j], p1=pts[j+1];
+  const x=p0[0]*(1-q)+p1[0]*q;
+  const y=p0[1]*(1-q)+p1[1]*q;
+
+  const jm=Math.max(0,j-1), jp=Math.min(pts.length-1,j+2);
+  const dx=pts[jp][0]-pts[jm][0], dy=pts[jp][1]-pts[jm][1];
+  const len=Math.hypot(dx,dy)||1;
+  return {x,y,ux:dx/len,uy:dy/len,nx:-dy/len,ny:dx/len};
+}
+
+function makeHCCBloodAnchors(n){
+  const R=rng(4101);
+  const arr=[];
+  const nPath=cfg.hcc.sinusoidPaths.length;
+  const phi=0.6180339887498949;
+
+  // Low-discrepancy phase distribution:
+  // any subset of the pool is spread through the sinusoidal network,
+  // so changing concentration changes density rather than producing packets.
+  for(let i=0;i<n;i++){
+    const pathIndex=(i*5) % nPath;
+    const u0=(i*phi + pathIndex/nPath*0.17) % 1;
+    arr.push({
+      pathIndex,
+      u0,
+      flowSpeed:0.0068 + R()*0.0016,
+      crossAmp:0.28 + R()*0.30,
+      phase:R()*Math.PI*2
+    });
+  }
+  return arr;
+}
+
+function makeCCCBloodAnchors(n){
+  const R=rng(4303);
+  const arr=[];
+  const vv=cfg.ccc.vessels;
+  for(let i=0;i<n;i++){
+    const v=vv[i % vv.length];
+    let x=v.cx, y=v.cy;
+    for(let k=0;k<500;k++){
+      const tx = v.cx + (R()-0.5)*v.rx*1.7;
+      const ty = v.cy + (R()-0.5)*v.ry*1.7;
+      if(ptInEllipse(tx,ty,v,-1.2)){ x=tx; y=ty; break; }
+    }
+    arr.push({
+      x,y,
+      vesselIndex:i % vv.length,
+      amp:cfg.ccc.bloodJitter*(0.42+R()*0.50),
+      p1:R()*Math.PI*2,p2:R()*Math.PI*2,p3:R()*Math.PI*2,
+      speed:cfg.ccc.bloodTemporal*(0.85+R()*0.55)
+    });
+  }
+  return arr;
+}
+
+function makeBloodAnchors(tp,n){
+  const R=rng(tp==="hcc"?4101:tp==="hem"?4202:4303);
+  const arr=[];
+  for(let i=0;i<n;i++){
+    const [x,y]=randomPointInVessel(tp,R);
+    arr.push({
+      x,y,
+      amp:cfg[tp].bloodJitter*(0.5+R()*0.7),
+      p1:R()*Math.PI*2,p2:R()*Math.PI*2,p3:R()*Math.PI*2,
+      speed:cfg[tp].bloodTemporal*(0.8+R()*0.7)
+    });
+  }
+  return arr;
+}
+const bloodPools = {
+  hcc:makeHCCBloodAnchors(180),
+  hem:makeBloodAnchors("hem",170),
+  ccc:makeCCCBloodAnchors(120)
+};
+function bloodPos(tp,a,t){
+  const s=a.speed*t;
+  let x,y;
+
+  if(tp==="hem"){
+    // Slow, coherent intravascular drift: visibly moving, but not Brownian-looking.
+    // This is a schematic representation of slow flow / pooling in cavernous spaces.
+    const drift=a.amp*1.7;
+    x=a.x
+      + Math.sin(0.72*s+a.p1)*drift
+      + Math.sin(0.19*s+a.p3)*a.amp*0.55;
+    y=a.y
+      + Math.cos(0.61*s+a.p2)*drift*0.72
+      + Math.sin(0.23*s+a.p1)*a.amp*0.45;
+  }else if(tp==="hcc"){
+    // Continuous one-way flow through the visible sinusoid.
+    // Particles wrap asynchronously at the voxel boundary, avoiding bolus-like packets.
+    const pts=cfg.hcc.sinusoidPaths[a.pathIndex];
+    const u=(a.u0 + t*a.flowSpeed) % 1;
+    const p=sampleVisiblePathAtU(pts,u);
+    const across=Math.sin(t*0.30+a.phase)*a.crossAmp;
+    return [p.x + p.nx*across, p.y + p.ny*across];
+  }else{
+    x=a.x + Math.sin(s+a.p1)*a.amp + Math.sin(0.57*s+a.p2)*a.amp*0.52;
+    y=a.y + Math.cos(0.83*s+a.p2)*a.amp*0.68 + Math.sin(0.49*s+a.p1)*a.amp*0.42;
+  }
+
+  for(let i=0;i<6 && !insideVessel(tp,x,y);i++){
+    x=(x+a.x)/2;
+    y=(y+a.y)/2;
+  }
+  if(!insideVessel(tp,x,y)){ x=a.x; y=a.y; }
+  return [x,y];
+}
+
+function wallStart(tp,idx,R){
+  if(tp==="hcc"){
+    for(let tries=0; tries<220; tries++){
+      const pts = cfg.hcc.sinusoidPaths[(idx + tries) % cfg.hcc.sinusoidPaths.length];
+      const j = 1 + Math.floor(R()*(pts.length-2));
+      const p0=pts[j-1], p=pts[j], p1=pts[j+1];
+      let tx=p1[0]-p0[0], ty=p1[1]-p0[1];
+      const len=Math.hypot(tx,ty) || 1;
+      tx/=len; ty/=len;
+      let nx=-ty, ny=tx;
+      const sign = R()<0.5 ? -1 : 1;
+      nx*=sign; ny*=sign;
+
+      const inner = {x:p[0] + nx*1.0, y:p[1] + ny*1.0};
+      // Search for the first valid EES point immediately outside the sinusoid.
+      for(const d of [4.8,5.5,6.3,7.2,8.2]){
+        const outer={x:p[0]+nx*d,y:p[1]+ny*d};
+        if(validEES(tp,outer.x,outer.y)){
+          return {mode:"path",a:0,v:null,x:outer.x,y:outer.y,vx:inner.x,vy:inner.y,nx,ny};
+        }
+      }
+    }
+    return {mode:"path",a:0,v:null,x:250,y:250,vx:246,vy:250,nx:1,ny:0};
+  }
+
+  const v = cfg[tp].vessels[idx % cfg[tp].vessels.length];
+  for(let k=0;k<180;k++){
+    const a=R()*Math.PI*2;
+    const p=ellipseBoundary(v,a,8);
+    if(validEES(tp,p.x,p.y)) return {mode:"ellipse", v,a,x:p.x,y:p.y};
+  }
+  const p=ellipseBoundary(v,0,8);
+  return {mode:"ellipse", v,a:0,x:p.x,y:p.y};
+}
+function makeLeakWalk(tp,idx){
+  const R=rng(700000 + idx*641 + (tp==="hcc"?11:tp==="hem"?22:33));
+  const st=wallStart(tp,idx,R);
+  let x=st.x, y=st.y, vx=.38*Math.cos(st.a), vy=.38*Math.sin(st.a);
+  const out=[[x,y]];
+  const steps = tp==="ccc" ? 1500 : 900;
+  const mem = tp==="ccc" ? 0.18 : 0.24;
+  const bounce = tp==="ccc" ? 0.58 : 0.68;
+
+  for(let s=0;s<steps;s++){
+    vx=mem*vx + n4(R)*cfg[tp].leakSpread;
+    vy=mem*vy + n4(R)*cfg[tp].leakSpread;
+
+    let nx=x+vx, ny=y+vy;
+    if(!validEES(tp,nx,ny)){
+      let ok=false;
+      for(let q=0;q<48;q++){
+        vx=n4(R)*cfg[tp].leakSpread*bounce;
+        vy=n4(R)*cfg[tp].leakSpread*bounce;
+        nx=x+vx; ny=y+vy;
+        if(validEES(tp,nx,ny)){ ok=true; break; }
+      }
+      if(!ok){ nx=x; ny=y; vx*=0.35; vy*=0.35; }
+    }
+    x=nx; y=ny; out.push([x,y]);
+  }
+  return {st,out};
+}
+const leakPools = {
+  hcc:Array.from({length:140},(_,i)=>makeLeakWalk("hcc",i)),
+  hem:Array.from({length:25},(_,i)=>makeLeakWalk("hem",i)),
+  ccc:Array.from({length:340},(_,i)=>makeLeakWalk("ccc",i))
+};
+function sample(path,t){
+  const m=path.length-2, i=clamp(Math.floor(t),0,m), q=t-i;
+  const a=path[i], b=path[i+1];
+  return [a[0]*(1-q)+b[0]*q, a[1]*(1-q)+b[1]*q];
+}
+
+function drawBackground(tp){
+  sctx.clearRect(0,0,500,500);
+  sctx.fillStyle="#fffdfd";
+  sctx.fillRect(0,0,500,500);
+
+  sctx.save();
+  sctx.beginPath();
+  sctx.rect(10,10,480,480);
+  sctx.clip();
+
+  if(tp==="hcc"){
+    sctx.fillStyle="rgba(252,239,243,1)";
+    sctx.fillRect(10,10,480,480);
+    cfg.hcc.trabeculae.forEach(pts=>{
+      pathStroke(sctx, pts, 31, "rgba(236,168,186,0.28)", 1);
+      pathStroke(sctx, pts, 22, "rgba(245,198,210,0.56)", 1);
+      pathStroke(sctx, pts, 15, "rgba(252,224,231,0.36)", 1);
+    });
+    cfg.hcc.cells.forEach(c=>drawHCCCell(sctx,c.x,c.y,c.r,c.seed));
+    cfg.hcc.sinusoidPaths.forEach((pts,idx)=>{
+      // Narrow, single sinusoidal blood space directly apposed to trabecular tumor cells.
+      pathStroke(sctx, pts, 9.2, "rgba(226,153,165,0.34)", 1);
+      pathStroke(sctx, pts, 6.8, "rgba(246,213,218,0.88)", 1);
+      pathStroke(sctx, pts, 0.8, "rgba(166,77,94,0.18)", 1);
+      drawMicroDots(sctx, pts, 7, "rgba(204,103,121,0.18)", 0.55, 1.15, 6000+idx);
+    });
+    cfg.hcc.vessels.forEach(v=>{
+      // elongated slit-like sinusoidal lumen
+      rotEllipse(sctx, v, "rgba(222,120,136,0.38)", "rgba(171,65,83,0.52)", 1.0, 1);
+      rotEllipse(
+        sctx,
+        {cx:v.cx,cy:v.cy,rx:Math.max(2,v.rx-2.2),ry:Math.max(1.4,v.ry-1.2),rot:v.rot},
+        "rgba(249,222,224,0.91)",
+        "rgba(222,167,176,0.34)",
+        0.45,
+        1
+      );
+    });
+  }
+
+  if(tp==="hem"){
+    sctx.fillStyle="rgba(252,238,242,1)";
+    sctx.fillRect(10,10,480,480);
+
+    // Thin fibrous septa
+    cfg.hem.septa.forEach((seg,idx)=>{
+      pathStroke(sctx, seg, 6.5, "rgba(246,236,239,0.52)", 1);
+      pathStroke(sctx, seg, 1.1, "rgba(213,178,188,0.42)", 1);
+      drawSeptalNucleiOnPath(sctx, seg, 6, 9200+idx);
+    });
+
+    cfg.hem.vessels.forEach(v=>{
+      rotEllipse(sctx, v, "rgba(244,194,201,0.92)", "rgba(190,92,109,0.42)", 0.9, 1);
+      rotEllipse(sctx, {cx:v.cx,cy:v.cy,rx:Math.max(1,v.rx-4.0),ry:Math.max(1,v.ry-4.0),rot:v.rot}, "rgba(248,207,212,0.95)", "rgba(229,170,180,0.18)", 0.35, 1);
+    });
+
+    // a few additional inter-septal stromal nuclei
+    const R=rng(9202);
+    for(let i=0;i<24;i++){
+      const x=20+R()*460, y=20+R()*460;
+      if(insideVessel("hem",x,y,-3)) continue;
+      rotEllipse(sctx,{cx:x,cy:y,rx:3.0+R()*1.0,ry:1.2+R()*0.45,rot:(R()-0.5)*180},"rgba(112,71,126,0.34)",null,0,1);
+    }
+  }
+
+  if(tp==="ccc"){
+    // Pale eosinophilic fibrous background
+    sctx.fillStyle="rgba(251,240,244,1)";
+    sctx.fillRect(10,10,480,480);
+
+    // Collagen bundles: flatter, layered fibrous bands (avoid tube-like appearance)
+    cfg.ccc.fibrosis.forEach(f=>{
+      pathStroke(sctx, f.pts, f.w+5, "rgba(239,201,210,0.14)", 1);
+      pathStroke(sctx, f.pts, f.w, "rgba(223,156,175,"+f.alpha+")", 1);
+      pathStroke(sctx, f.pts, Math.max(1.0,f.w*0.55), "rgba(233,184,197,0.18)", 1);
+    });
+
+    // Fibroblast nuclei aligned with the collagen bundles
+    cfg.ccc.fibroNuclei.forEach(n=>{
+      rotEllipse(sctx, {cx:n.x,cy:n.y,rx:n.rx,ry:n.ry,rot:n.rot}, "rgba(93,59,112,0.62)", null, 0, 1);
+    });
+
+    // Sparse vessels
+    cfg.ccc.vessels.forEach(v=>{
+      rotEllipse(sctx, v, "rgba(246,207,211,0.90)", "rgba(211,113,126,0.72)", 1.3, 1);
+      rotEllipse(sctx, {cx:v.cx,cy:v.cy,rx:Math.max(1,v.rx-2.8),ry:Math.max(1,v.ry-2.8),rot:v.rot}, "rgba(255,248,248,0.96)", "rgba(237,218,222,0.55)", 0.7, 1);
+    });
+
+    // Sparse tumor / gland-like elements
+    cfg.ccc.glands.forEach((g,i)=>{
+      if(i%2===0){
+        drawCCCGland(sctx,g.x,g.y,g.r,g.seed);
+      }else{
+        polyCell(sctx,g.x,g.y,g.r*0.92,g.seed);
+        if(i%5===0){
+          circle(sctx,g.x,g.y,g.r*0.38,"rgba(255,249,250,0.76)");
+        }
+      }
+    });
+  }
+
+  sctx.restore();
+
+  // border
+  sctx.strokeStyle="#334155";
+  sctx.lineWidth=2.4;
+  sctx.strokeRect(8,8,484,484);
+}
+
+function drawParticles(tp){
+  const nb = bloodParticles(tp,time);
+  const ne = eesParticles(tp,time);
+
+  if(tp==="hcc"){
+    // Exact-count rule:
+    // every visible blue particle represents one contrast unit.
+    // The anchors are distributed across the sinusoidal network, so changing
+    // the integer particle count changes density without creating packets.
+    for(let i=0;i<nb;i++){
+      const p=bloodPos(tp,bloodPools.hcc[i],time);
+      drawContrastParticle(sctx,p[0],p[1],2.55,0.98);
+    }
+  }else{
+    for(let i=0;i<nb;i++){
+      const p=bloodPos(tp,bloodPools[tp][i],time);
+      drawContrastParticle(sctx,p[0],p[1], tp==="hem"?3.05:3.0, 0.98);
+    }
+  }
+
+  const CROSS=12;
+  for(let i=0;i<ne;i++){
+    const birth=10+(i%100)*0.33;
+    const lp=leakPools[tp][i % leakPools[tp].length];
+    const v=lp.st.v, a=lp.st.a;
+    let p0, p1;
+    if(lp.st.mode==="path"){
+      p0 = {x:lp.st.vx, y:lp.st.vy};
+      p1 = {x:lp.st.x, y:lp.st.y};
+    }else{
+      p0 = ellipseBoundary(v,a,-10);
+      p1 = ellipseBoundary(v,a,26);
+    }
+
+    if(time<birth){
+      drawContrastParticle(sctx,p0.x,p0.y,2.35,0.28);
+      continue;
+    }
+    const age=time-birth;
+    if(age<CROSS){
+      const q=age/CROSS, x=p0.x*(1-q)+p1.x*q, y=p0.y*(1-q)+p1.y*q;
+      sctx.save();
+      sctx.strokeStyle="rgba(37,99,235,"+(tp==="ccc"?"0.09":"0.13")+")";
+      sctx.lineWidth=1.1;
+      sctx.beginPath(); sctx.moveTo(p0.x,p0.y); sctx.lineTo(p1.x,p1.y); sctx.stroke();
+      sctx.restore();
+      drawContrastParticle(sctx,x,y,tp==="hcc"?2.75:3.35,0.98);
+    }else{
+      const p=sample(lp.out, Math.min(890,(age-CROSS)*cfg[tp].leakVisualSpeed));
+      drawContrastParticle(sctx,p[0],p[1], tp==="ccc"?2.75:(tp==="hcc"?2.45:2.85), tp==="ccc"?0.72:(tp==="hcc"?0.70:0.78));
+    }
+  }
+  return nb+ne;
+}
+
+function drawScene(){
+  drawBackground(type);
+  return drawParticles(type);
+}
+
+function drawGraph(){
+  const W=760,H=340,L=74,R=28,T=30,B=48,min=35,max=175;
+  const X=x=>L+x/300*(W-L-R), Y=y=>T+(max-y)/(max-min)*(H-T-B);
+  gctx.clearRect(0,0,W,H);
+  gctx.fillStyle="#ffffff";
+  gctx.fillRect(0,0,W,H);
+
+  const bands = [
+    [0,40,"rgba(239,246,255,0.55)"],
+    [40,100,"rgba(240,253,244,0.46)"],
+    [100,180,"rgba(250,245,255,0.42)"],
+    [180,300,"rgba(249,250,251,0.72)"]
+  ];
+  bands.forEach(([a,b,c])=>{
+    gctx.fillStyle=c;
+    gctx.fillRect(X(a), T, X(b)-X(a), H-T-B);
+  });
+
+  gctx.strokeStyle="#e5e7eb";
+  gctx.lineWidth=1;
+  gctx.strokeRect(L, T, W-L-R, H-T-B);
+
+  [40,60,80,100,120,140,160].forEach(v=>{
+    const y=Y(v);
+    gctx.strokeStyle="#e8eef6";
+    gctx.lineWidth=1;
+    gctx.beginPath();
+    gctx.moveTo(L,y);
+    gctx.lineTo(W-R,y);
+    gctx.stroke();
+
+    gctx.fillStyle="#475569";
+    gctx.font="600 12px sans-serif";
+    gctx.textAlign="right";
+    gctx.fillText(String(v), L-12, y+4);
+  });
+
+  [0,50,100,150,200,250,300].forEach(v=>{
+    const x=X(v);
+    gctx.strokeStyle="#f1f5f9";
+    gctx.lineWidth=1;
+    gctx.beginPath();
+    gctx.moveTo(x,T);
+    gctx.lineTo(x,H-B);
+    gctx.stroke();
+
+    gctx.fillStyle="#475569";
+    gctx.font="600 12px sans-serif";
+    gctx.textAlign="center";
+    gctx.fillText(String(v), x, H-14);
+  });
+
+  gctx.strokeStyle="#334155";
+  gctx.lineWidth=1.8;
+  gctx.beginPath();
+  gctx.moveTo(L,T);
+  gctx.lineTo(L,H-B);
+  gctx.lineTo(W-R,H-B);
+  gctx.stroke();
+
+  gctx.fillStyle="#334155";
+  gctx.font="700 13px sans-serif";
+  gctx.textAlign="left";
+  gctx.fillText("CT値（HU）", 18, 20);
+  gctx.textAlign="right";
+  gctx.fillText("時間（秒）", W-R, H-14);
+
+  gctx.fillStyle="#475569";
+  gctx.font="700 11px sans-serif";
+  gctx.textAlign="center";
+  gctx.fillText("動脈相", (X(0)+X(40))/2, T+15);
+  gctx.fillText("門脈相", (X(40)+X(100))/2, T+15);
+  gctx.fillText("平衡相", (X(100)+X(180))/2, T+15);
+  gctx.fillText("遅延相", (X(180)+X(300))/2, T+15);
+
+  const colors = {hcc:"#d9485f", liver:"#475569", hem:"#1f9d8b", ccc:"#7c5cc4"};
+  const order = ["hcc","liver","hem","ccc"];
+
+  order.forEach(tp=>{
+    const pts=[];
+    for(let x=0;x<=300;x+=2) pts.push([X(x), Y(hu(tp,x))]);
+    gctx.save();
+    gctx.strokeStyle=colors[tp];
+    gctx.lineWidth = tp===type ? 4.8 : (tp==="liver" ? 3.2 : 3.5);
+    gctx.setLineDash(tp==="liver" ? [10,6] : []);
+    gctx.globalAlpha = tp===type ? 1 : 0.94;
+    gctx.lineCap="round";
+    gctx.lineJoin="round";
+    smoothCurve(gctx, pts);
+    gctx.stroke();
+    gctx.restore();
+  });
+
+  const cx=X(time), cy=Y(hu(type,time));
+  gctx.save();
+  gctx.strokeStyle="#94a3b8";
+  gctx.lineWidth=1.5;
+  gctx.setLineDash([4,4]);
+  gctx.beginPath();
+  gctx.moveTo(cx,T);
+  gctx.lineTo(cx,H-B);
+  gctx.stroke();
+  gctx.restore();
+
+  circle(gctx,cx,cy,6.2,"#2563eb",1,"#ffffff",2.2);
+}
+
+function update(){
+  document.getElementById("title").textContent = cfg[type].title;
+  document.getElementById("huNum").textContent = Math.round(hu(type,time));
+  document.getElementById("phase").textContent = phase(time);
+  document.getElementById("timeText").textContent = Math.round(time)+"秒";
+  slider.value = Math.round(time);
+  const count = drawScene();
+  drawGraph();
+  document.getElementById("count").textContent = count;
+}
+
+function tick(ts){
+  if(!playing) return;
+  if(!last) last = ts;
+  const dt = ts-last; last=ts;
+  time += dt/55;
+  if(time>=300){ time=300; playing=false; document.getElementById("play").textContent="▶︎ 再生"; }
+  update();
+  if(playing) raf=requestAnimationFrame(tick);
+}
+
+document.querySelectorAll(".tab").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    type=btn.dataset.type;
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    btn.classList.add("active");
+    update();
+  });
+});
+document.getElementById("play").addEventListener("click",()=>{
+  playing=!playing;
+  if(playing){
+    if(time>=300) time=0;
+    last=0;
+    document.getElementById("play").textContent="❚❚ 停止";
+    raf=requestAnimationFrame(tick);
+  }else{
+    document.getElementById("play").textContent="▶︎ 再生";
+    cancelAnimationFrame(raf);
+  }
+});
+document.getElementById("reset").addEventListener("click",()=>{
+  playing=false; cancelAnimationFrame(raf); time=0; last=0;
+  document.getElementById("play").textContent="▶︎ 再生";
+  update();
+});
+slider.addEventListener("input",()=>{ time=Number(slider.value); update(); });
+
+update();
+})();
+</script>
+</body>
+</html>
