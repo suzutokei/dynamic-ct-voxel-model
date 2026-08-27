@@ -594,7 +594,7 @@ function generateData(){
     out.hem.spaces = out.hem.vessels.map((v,i)=>makeBlobFromEllipse(v, 5200+i));
 
     const R=rng(202);
-    for(let i=0;i<34;i++){
+    for(let i=0;i<18;i++){
       const x1=20+R()*460, y1=20+R()*460, x2=20+R()*460, y2=20+R()*460;
       out.hem.septa.push([[x1,y1],[(x1+x2)/2+(R()-0.5)*60,(y1+y2)/2+(R()-0.5)*60],[x2,y2]]);
     }
@@ -602,7 +602,7 @@ function generateData(){
 
   // CCC: abundant desmoplastic stroma with coherent collagen bundles
   out.ccc = {
-    title:"胆管癌（線維性間質）",
+    title:"肝内胆管癌",
     subtitle:"",
     desc:"",
     fibrosis:[],
@@ -966,27 +966,27 @@ function drawBackground(tp){
     sctx.fillStyle="rgba(252,238,242,1)";
     sctx.fillRect(10,10,480,480);
 
-    // Irregular cavernous vascular spaces
-    cfg.hem.spaces.forEach((sp,idx)=>{
-      drawClosedSmoothShape(sctx, sp, "rgba(244,194,201,0.90)", "rgba(186,92,108,0.34)", 0.9, 1);
-      const c=polyCentroid(sp);
-      const inner=sp.map(([x,y])=>[c.x + (x-c.x)*0.90, c.y + (y-c.y)*0.90]);
-      drawClosedSmoothShape(sctx, inner, "rgba(248,206,212,0.93)", "rgba(229,170,180,0.14)", 0.35, 1);
+    // Thin fibrous septa in the background
+    cfg.hem.septa.forEach((seg,idx)=>{
+      pathStroke(sctx, seg, 4.8, "rgba(247,239,242,0.34)", 1);
+      pathStroke(sctx, seg, 0.8, "rgba(206,171,182,0.20)", 1);
+      drawSeptalNucleiOnPath(sctx, seg, 4, 9200+idx);
     });
 
-    // Thin fibrous septa
-    cfg.hem.septa.forEach((seg,idx)=>{
-      pathStroke(sctx, seg, 6.2, "rgba(246,236,239,0.54)", 1);
-      pathStroke(sctx, seg, 1.0, "rgba(213,178,188,0.40)", 1);
-      drawSeptalNucleiOnPath(sctx, seg, 6, 9200+idx);
+    // Irregular cavernous vascular spaces on top
+    cfg.hem.spaces.forEach((sp,idx)=>{
+      drawClosedSmoothShape(sctx, sp, "rgba(243,191,199,0.93)", "rgba(178,84,101,0.24)", 0.75, 1);
+      const c=polyCentroid(sp);
+      const inner=sp.map(([x,y])=>[c.x + (x-c.x)*0.91, c.y + (y-c.y)*0.91]);
+      drawClosedSmoothShape(sctx, inner, "rgba(248,206,212,0.95)", null, 0, 1);
     });
 
     // a few additional inter-septal stromal nuclei
     const R=rng(9202);
-    for(let i=0;i<24;i++){
+    for(let i=0;i<18;i++){
       const x=20+R()*460, y=20+R()*460;
       if(insideVessel("hem",x,y,-3)) continue;
-      rotEllipse(sctx,{cx:x,cy:y,rx:3.0+R()*1.0,ry:1.2+R()*0.45,rot:(R()-0.5)*180},"rgba(112,71,126,0.34)",null,0,1);
+      rotEllipse(sctx,{cx:x,cy:y,rx:2.8+R()*0.8,ry:1.1+R()*0.35,rot:(R()-0.5)*180},"rgba(112,71,126,0.26)",null,0,1);
     }
   }
 
