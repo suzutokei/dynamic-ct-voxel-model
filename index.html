@@ -302,6 +302,44 @@ function clipPolyHalfPlane(poly, A, B, C){
   return out;
 }
 
+function smoothPolygonChaikin(poly, passes=2, t=0.24){
+  let pts=poly.map(p=>[p[0],p[1]]);
+  for(let pass=0; pass<passes; pass++){
+    const out=[];
+    for(let i=0;i<pts.length;i++){
+      const p0=pts[i], p1=pts[(i+1)%pts.length];
+      const q=[(1-t)*p0[0] + t*p1[0], (1-t)*p0[1] + t*p1[1]];
+      const r=[t*p0[0] + (1-t)*p1[0], t*p0[1] + (1-t)*p1[1]];
+      out.push(q,r);
+    }
+    pts=out;
+  }
+  return pts;
+}
+
+function softenPolygon(poly, seed){
+  const R=rng(seed);
+  const c=polyCentroid(poly);
+  // slight inward relaxation to create thin septa while preserving adjacency concept
+  let pts=poly.map(([x,y],k)=>{
+    const dx=x-c.x, dy=y-c.y;
+    const s=0.975 + (R()-0.5)*0.010;
+    return [c.x + dx*s, c.y + dy*s];
+  });
+  pts=smoothPolygonChaikin(pts, 2, 0.23);
+
+  // very subtle low-frequency undulation so contours look organic rather than geometric
+  pts=pts.map(([x,y],k)=>{
+    const dx=x-c.x, dy=y-c.y;
+    const len=Math.hypot(dx,dy)||1;
+    const nx=dx/len, ny=dy/len;
+    const wobble=Math.sin((k/pts.length)*Math.PI*2*2 + R()*Math.PI*2)*1.4;
+    return [x + nx*wobble, y + ny*wobble];
+  });
+
+  return smoothPolygonChaikin(pts, 1, 0.25);
+}
+
 function makeVoronoiCells(seeds, x0, y0, x1, y1){
   const box=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]];
   const cells=[];
@@ -373,11 +411,11 @@ function drawWallNucleiOnPolygon(ctx, pts, count, seed){
     const ang=Math.atan2(dy,dx)*180/Math.PI;
     const len=Math.hypot(dx,dy) || 1;
     const nx=-dy/len, ny=dx/len;
-    const off=(R()<0.5?-1:1)*(0.8+R()*1.0);
+    const off=(R()<0.5?-1:1)*(0.55+R()*0.75);
     rotEllipse(
       ctx,
-      {cx:x+nx*off, cy:y+ny*off, rx:2.7+R()*0.8, ry:1.0+R()*0.3, rot:ang},
-      "rgba(102,62,122,0.42)",
+      {cx:x+nx*off, cy:y+ny*off, rx:2.5+R()*0.7, ry:0.95+R()*0.25, rot:ang},
+      "rgba(102,62,122,0.34)",
       null,0,1
     );
   }
@@ -694,16 +732,8 @@ function generateData(){
 
     out.hem.spaces = makeVoronoiCells(seeds, 10,10,490,490);
 
-    // Slightly round and irregularize each cell so they look less geometric,
-    // while keeping adjacency/non-overlap conceptually intact.
-    out.hem.spaces = out.hem.spaces.map((poly,idx)=>{
-      const c=polyCentroid(poly);
-      return poly.map(([x,y],k)=>{
-        const dx=x-c.x, dy=y-c.y;
-        const s=0.965 + ((idx*13 + k*7)%5)*0.006;
-        return [c.x + dx*s, c.y + dy*s];
-      });
-    });
+    // Round off sharp vertices and make the cavernous spaces more organic.
+    out.hem.spaces = out.hem.spaces.map((poly,idx)=>softenPolygon(poly, 6300+idx));
   }
 
   // CCC: abundant desmoplastic stroma with coherent collagen bundles
@@ -1112,10 +1142,10 @@ function drawBackground(tp){
 
     // Non-overlapping cavernous vascular spaces with thin shared walls
     cfg.hem.spaces.forEach((sp,idx)=>{
-      drawClosedSmoothShape(sctx, sp, "rgba(244,236,240,0.995)", "rgba(118,75,136,0.58)", 1.0, 1);
+      drawClosedSmoothShape(sctx, sp, "rgba(245,237,241,0.996)", "rgba(124,85,141,0.46)", 0.85, 1);
       const c=polyCentroid(sp);
-      const inner=sp.map(([x,y])=>[c.x + (x-c.x)*0.962, c.y + (y-c.y)*0.962]);
-      drawClosedSmoothShape(sctx, inner, "rgba(250,244,246,0.998)", null, 0, 1);
+      const inner=sp.map(([x,y])=>[c.x + (x-c.x)*0.970, c.y + (y-c.y)*0.970]);
+      drawClosedSmoothShape(sctx, inner, "rgba(251,245,247,0.999)", null, 0, 1);
       drawWallNucleiOnPolygon(sctx, sp, 2 + (idx%2), 9400+idx);
     });
 
