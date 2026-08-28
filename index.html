@@ -184,7 +184,7 @@ const particleCurves = {
   liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
 };
 const bloodFracCurves = {
-  hcc:[[0,1],[30,0.88],[80,0.80],[180,0.76],[300,0.74]],
+  hcc:[[0,1],[30,0.84],[80,0.74],[180,0.70],[300,0.68]],
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
   ccc:[[0,1],[30,0.55],[80,0.24],[180,0.12],[300,0.08]]
 };
@@ -665,7 +665,7 @@ function generateData(){
     trabeculae:[],
     sinusoidPaths:[],
     vessels:[],
-    leakVisualSpeed:0.56, leakSpread:1.32, bloodJitter:0.55, bloodTemporal:0.20
+    leakVisualSpeed:0.60, leakSpread:1.48, bloodJitter:0.55, bloodTemporal:0.20
   };
   {
     const R=rng(101);
@@ -788,7 +788,7 @@ function generateData(){
       {cx:270, cy:154, rx:16, ry:10, rot:31},
       {cx:150, cy:360, rx:15, ry:10, rot:-22}
     ],
-    leakVisualSpeed:1.30, leakSpread:5.8, bloodJitter:0.82, bloodTemporal:0.14
+    leakVisualSpeed:0.82, leakSpread:3.6, bloodJitter:0.82, bloodTemporal:0.14
   };
   {
     const R=rng(303);
@@ -1131,6 +1131,23 @@ function makeLeakWalk(tp,idx){
         vx = 0.52*vx + ax*0.024 + tx*n4(R)*cfg[tp].leakSpread*0.10 + n4(R)*cfg[tp].leakSpread*0.15;
         vy = 0.52*vy + ay*0.024 + ty*n4(R)*cfg[tp].leakSpread*0.10 + n4(R)*cfg[tp].leakSpread*0.15;
       }
+    }else if(tp==="ccc"){
+      // CCC: slower seepage into abundant fibrous stroma.
+      // Mild initial outward movement, then broad but calm diffusion around a larger local pool.
+      const nx0 = Math.cos(st.a);
+      const ny0 = Math.sin(st.a);
+      const cx = st.x + nx0*34;
+      const cy = st.y + ny0*34;
+      const ax = cx - x;
+      const ay = cy - y;
+
+      if(s < 95){
+        vx = 0.72*vx + nx0*0.12 + ax*0.006 + n4(R)*cfg[tp].leakSpread*0.17;
+        vy = 0.72*vy + ny0*0.12 + ay*0.006 + n4(R)*cfg[tp].leakSpread*0.17;
+      }else{
+        vx = 0.78*vx + ax*0.010 + n4(R)*cfg[tp].leakSpread*0.10;
+        vy = 0.78*vy + ay*0.010 + n4(R)*cfg[tp].leakSpread*0.10;
+      }
     }else{
       vx=mem*vx + n4(R)*cfg[tp].leakSpread;
       vy=mem*vy + n4(R)*cfg[tp].leakSpread;
@@ -1150,6 +1167,15 @@ function makeLeakWalk(tp,idx){
           const ay = cy - y;
           vx = ax*0.06 + tx*n4(R)*cfg[tp].leakSpread*0.10 + n4(R)*cfg[tp].leakSpread*0.12;
           vy = ay*0.06 + ty*n4(R)*cfg[tp].leakSpread*0.10 + n4(R)*cfg[tp].leakSpread*0.12;
+        }else if(tp==="ccc"){
+          const nx0 = Math.cos(st.a);
+          const ny0 = Math.sin(st.a);
+          const cx = st.x + nx0*30;
+          const cy = st.y + ny0*30;
+          const ax = cx - x;
+          const ay = cy - y;
+          vx = ax*0.05 + n4(R)*cfg[tp].leakSpread*0.08;
+          vy = ay*0.05 + n4(R)*cfg[tp].leakSpread*0.08;
         }else{
           vx=n4(R)*cfg[tp].leakSpread*bounce;
           vy=n4(R)*cfg[tp].leakSpread*bounce;
@@ -1164,7 +1190,7 @@ function makeLeakWalk(tp,idx){
   return {st,out};
 }
 const leakPools = {
-  hcc:Array.from({length:190},(_,i)=>makeLeakWalk("hcc",i)),
+  hcc:Array.from({length:240},(_,i)=>makeLeakWalk("hcc",i)),
   hem:Array.from({length:12},(_,i)=>makeLeakWalk("hem",i)),
   ccc:Array.from({length:340},(_,i)=>makeLeakWalk("ccc",i))
 };
@@ -1349,7 +1375,7 @@ function drawParticles(tp){
       drawContrastParticle(sctx,x,y,tp==="hcc"?2.95:3.35,0.98);
     }else{
       const p=sample(lp.out, Math.min(890,(age-CROSS)*cfg[tp].leakVisualSpeed));
-      drawContrastParticle(sctx,p[0],p[1], tp==="ccc"?2.75:(tp==="hcc"?2.70:2.85), tp==="ccc"?0.72:(tp==="hcc"?0.82:0.78));
+      drawContrastParticle(sctx,p[0],p[1], tp==="ccc"?2.55:(tp==="hcc"?2.85:2.85), tp==="ccc"?0.60:(tp==="hcc"?0.88:0.78));
     }
   }
   return nb+ne;
