@@ -302,6 +302,32 @@ function clipPolyHalfPlane(poly, A, B, C){
   return out;
 }
 
+function subdividePolygonEdges(poly, maxLen=28, seed=0){
+  const R=rng(seed||1);
+  const out=[];
+  for(let i=0;i<poly.length;i++){
+    const p0=poly[i], p1=poly[(i+1)%poly.length];
+    out.push([p0[0],p0[1]]);
+    const dx=p1[0]-p0[0], dy=p1[1]-p0[1];
+    const len=Math.hypot(dx,dy);
+    const n=Math.max(0, Math.floor(len/maxLen));
+    if(n>0){
+      const nx = len ? -dy/len : 0;
+      const ny = len ?  dx/len : 0;
+      for(let k=1;k<=n;k++){
+        const q=k/(n+1);
+        // Very mild normal perturbation to avoid long straight runs.
+        const off=(R()-0.5)*Math.min(5.5, len*0.06);
+        out.push([
+          p0[0] + dx*q + nx*off,
+          p0[1] + dy*q + ny*off
+        ]);
+      }
+    }
+  }
+  return out;
+}
+
 function smoothPolygonChaikin(poly, passes=2, t=0.24){
   let pts=poly.map(p=>[p[0],p[1]]);
   for(let pass=0; pass<passes; pass++){
@@ -320,24 +346,35 @@ function smoothPolygonChaikin(poly, passes=2, t=0.24){
 function softenPolygon(poly, seed){
   const R=rng(seed);
   const c=polyCentroid(poly);
+
   // slight inward relaxation to create thin septa while preserving adjacency concept
   let pts=poly.map(([x,y],k)=>{
     const dx=x-c.x, dy=y-c.y;
-    const s=0.975 + (R()-0.5)*0.010;
+    const s=0.978 + (R()-0.5)*0.012;
     return [c.x + dx*s, c.y + dy*s];
   });
-  pts=smoothPolygonChaikin(pts, 2, 0.23);
 
-  // very subtle low-frequency undulation so contours look organic rather than geometric
+  // Break up long straight edges first.
+  pts=subdividePolygonEdges(pts, 24, seed+101);
+
+  // Round the contour more strongly.
+  pts=smoothPolygonChaikin(pts, 3, 0.23);
+
+  // Gentle organic undulation with low amplitude.
   pts=pts.map(([x,y],k)=>{
     const dx=x-c.x, dy=y-c.y;
     const len=Math.hypot(dx,dy)||1;
     const nx=dx/len, ny=dy/len;
-    const wobble=Math.sin((k/pts.length)*Math.PI*2*2 + R()*Math.PI*2)*1.4;
+    const phase=(k/pts.length)*Math.PI*2;
+    const wobble=
+      Math.sin(phase*2 + R()*Math.PI*2)*1.0 +
+      Math.sin(phase*3 + R()*Math.PI*2)*0.55;
     return [x + nx*wobble, y + ny*wobble];
   });
 
-  return smoothPolygonChaikin(pts, 1, 0.25);
+  // Final gentle smoothing to remove residual linearity or spikes.
+  pts=smoothPolygonChaikin(pts, 2, 0.25);
+  return pts;
 }
 
 function makeVoronoiCells(seeds, x0, y0, x1, y1){
@@ -723,11 +760,12 @@ function generateData(){
 
     // Extra seeds to create some smaller vascular spaces, especially inferior-right
     const extra = [
-      [338, 106],[405, 124],[292, 214],[382, 236],
-      [436, 300],[330, 332],[410, 388],[284, 404]
+      [332, 102],[406, 130],[286, 206],[388, 240],
+      [438, 296],[324, 336],[416, 386],[278, 410],
+      [118, 306],[182, 158],[150, 404]
     ];
     extra.forEach(([x,y],i)=>{
-      seeds.push({x:x+(R()-0.5)*16, y:y+(R()-0.5)*16});
+      seeds.push({x:x+(R()-0.5)*18, y:y+(R()-0.5)*18});
     });
 
     out.hem.spaces = makeVoronoiCells(seeds, 10,10,490,490);
@@ -1137,24 +1175,44 @@ function drawBackground(tp){
   }
 
   if(tp==="hem"){
-    sctx.fillStyle="rgba(252,238,242,1)";
+    // Very pale eosinophilic background so the narrow septa are not "empty"
+    sctx.fillStyle="rgba(249,236,241,1)";
     sctx.fillRect(10,10,480,480);
 
-    // Non-overlapping cavernous vascular spaces with thin shared walls
+    // Subtle septal collagen hints only in the non-vascular gaps
+    const R0=rng(9101);
+    for(let i=0;i<34;i++){
+      const x=22+R0()*456, y=22+R0()*456;
+      if(insideVessel("hem",x,y,0)) continue;
+      rotEllipse(
+        sctx,
+        {cx:x,cy:y,rx:5.5+R0()*3.5,ry:0.75+R0()*0.30,rot:(R0()-0.5)*180},
+        "rgba(231,198,210,0.22)",
+        null,0,1
+      );
+    }
+
+    // Non-overlapping cavernous vascular spaces with thin shared walls / septa
     cfg.hem.spaces.forEach((sp,idx)=>{
-      drawClosedSmoothShape(sctx, sp, "rgba(245,237,241,0.996)", "rgba(124,85,141,0.46)", 0.85, 1);
+      drawClosedSmoothShape(sctx, sp, "rgba(240,227,234,0.998)", "rgba(129,92,145,0.34)", 0.68, 1);
       const c=polyCentroid(sp);
-      const inner=sp.map(([x,y])=>[c.x + (x-c.x)*0.970, c.y + (y-c.y)*0.970]);
-      drawClosedSmoothShape(sctx, inner, "rgba(251,245,247,0.999)", null, 0, 1);
+      // shrink a bit more so a narrow septal band remains visible between adjacent spaces
+      const inner=sp.map(([x,y])=>[c.x + (x-c.x)*0.958, c.y + (y-c.y)*0.958]);
+      drawClosedSmoothShape(sctx, inner, "rgba(251,246,248,0.999)", null, 0, 1);
       drawWallNucleiOnPolygon(sctx, sp, 2 + (idx%2), 9400+idx);
     });
 
-    // Very sparse nuclei in narrow septal areas only
+    // Sparse stromal nuclei in the septa
     const R=rng(9202);
-    for(let i=0;i<6;i++){
+    for(let i=0;i<10;i++){
       const x=20+R()*460, y=20+R()*460;
-      if(insideVessel("hem",x,y,-3)) continue;
-      rotEllipse(sctx,{cx:x,cy:y,rx:2.2+R()*0.5,ry:0.85+R()*0.20,rot:(R()-0.5)*180},"rgba(112,71,126,0.18)",null,0,1);
+      if(insideVessel("hem",x,y,-2)) continue;
+      rotEllipse(
+        sctx,
+        {cx:x,cy:y,rx:2.2+R()*0.5,ry:0.85+R()*0.20,rot:(R()-0.5)*180},
+        "rgba(112,71,126,0.20)",
+        null,0,1
+      );
     }
   }
 
