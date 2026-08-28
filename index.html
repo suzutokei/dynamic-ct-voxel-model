@@ -184,7 +184,7 @@ const particleCurves = {
   liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
 };
 const bloodFracCurves = {
-  hcc:[[0,1],[30,0.84],[80,0.74],[180,0.70],[300,0.68]],
+  hcc:[[0,1],[30,0.82],[80,0.70],[180,0.66],[300,0.64]],
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
   ccc:[[0,1],[30,0.55],[80,0.24],[180,0.12],[300,0.08]]
 };
@@ -788,7 +788,7 @@ function generateData(){
       {cx:270, cy:154, rx:16, ry:10, rot:31},
       {cx:150, cy:360, rx:15, ry:10, rot:-22}
     ],
-    leakVisualSpeed:0.82, leakSpread:3.6, bloodJitter:0.82, bloodTemporal:0.14
+    leakVisualSpeed:0.74, leakSpread:3.2, bloodJitter:0.82, bloodTemporal:0.14
   };
   {
     const R=rng(303);
@@ -1374,11 +1374,54 @@ function drawParticles(tp){
       sctx.restore();
       drawContrastParticle(sctx,x,y,tp==="hcc"?2.95:3.35,0.98);
     }else{
-      const p=sample(lp.out, Math.min(890,(age-CROSS)*cfg[tp].leakVisualSpeed));
+      const t = Math.min(890,(age-CROSS)*cfg[tp].leakVisualSpeed);
+      const p = disperseEESPoint(tp, lp, t, i, age);
       drawContrastParticle(sctx,p[0],p[1], tp==="ccc"?2.55:(tp==="hcc"?2.85:2.85), tp==="ccc"?0.60:(tp==="hcc"?0.88:0.78));
     }
   }
   return nb+ne;
+}
+
+function disperseEESPoint(tp, lp, t, idx, age){
+  const p = sample(lp.out, t);
+  if(tp==="hem") return p;
+
+  // Local tangent/normal from neighboring path samples
+  const pPrev = sample(lp.out, Math.max(0, t-3.0));
+  const pNext = sample(lp.out, Math.min(lp.out.length-1.01, t+3.0));
+  let tx = pNext[0]-pPrev[0], ty = pNext[1]-pPrev[1];
+  const len = Math.hypot(tx,ty) || 1;
+  tx/=len; ty/=len;
+  const nx = -ty, ny = tx;
+
+  // Deterministic particle-specific phase so particles separate rather than clump.
+  const phase = idx*1.6180339887 + (tp==="ccc" ? age*0.012 : age*0.020);
+  const speedShift = (Math.sin(idx*12.9898)*43758.5453)%1;
+  const signed = speedShift - Math.floor(speedShift) - 0.5;
+
+  // Along-track spread + gentle lateral spread that grows with age.
+  const t2 = t + signed*(tp==="ccc" ? 10.0 : 7.0);
+  const q = sample(lp.out, Math.max(0, Math.min(lp.out.length-1.01, t2)));
+
+  let radius, alongAmp, swirl;
+  if(tp==="hcc"){
+    radius = Math.min(7.0, 0.8 + age*0.020);
+    alongAmp = 0.6 + Math.min(1.2, age*0.006);
+    swirl = 0.35;
+  }else{ // ccc
+    radius = Math.min(10.0, 1.2 + age*0.026);
+    alongAmp = 0.9 + Math.min(1.8, age*0.008);
+    swirl = 0.16; // calmer than HCC
+  }
+
+  const offN = Math.sin(phase)*radius + Math.sin(phase*0.47)*swirl*radius;
+  const offT = Math.cos(phase*0.83)*alongAmp;
+
+  const x = q[0] + nx*offN + tx*offT;
+  const y = q[1] + ny*offN + ty*offT;
+
+  if(validEES(tp,x,y)) return [x,y];
+  return p;
 }
 
 function drawScene(){
