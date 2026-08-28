@@ -1058,7 +1058,7 @@ function makeEESTargets(tp, cols, rows, attemptsPerCell=18, seed=1){
     }
   }
   // add some extra random targets to avoid grid impression
-  let extras = tp==="hcc" ? 260 : 420;
+  let extras = tp==="hcc" ? 90 : 140;
   while(extras-- > 0){
     const x = 22 + R()*456;
     const y = 22 + R()*456;
@@ -1144,31 +1144,29 @@ function makeLeakWalk(tp,idx){
   const nx0 = st.nx || Math.cos(st.a);
   const ny0 = st.ny || Math.sin(st.a);
 
-  const targets = eesTargets[tp] || [[x,y]];
-  const tgt = targets[idx % targets.length];
+  const targets = ensureEESTargets(tp);
+  const tgt = targets[idx % targets.length] || [x,y];
   let tx = tgt[0], ty = tgt[1];
 
   let vx=nx0*0.32, vy=ny0*0.32;
   const out=[[x,y]];
 
-  const steps = tp==="hcc" ? 2200 : (tp==="ccc" ? 2600 : 1000);
+  // Much lighter than before, but still long enough to show spread.
+  const steps = tp==="hcc" ? 700 : (tp==="ccc" ? 950 : 180);
   const persistence = tp==="hcc" ? 0.22 : (tp==="ccc" ? 0.30 : 0.55);
   const noise = tp==="hcc" ? 0.72 : (tp==="ccc" ? 0.55 : 0.42);
   const maxStep = tp==="hcc" ? 1.10 : (tp==="ccc" ? 0.90 : 1.10);
 
   for(let k=0;k<steps;k++){
-    // If we reached the assigned target, choose another one so the distribution
-    // eventually spreads over the whole voxel rather than staying local.
     let dx = tx - x, dy = ty - y;
     let dist = Math.hypot(dx,dy) || 1;
     if(dist < (tp==="hcc" ? 10 : 14)){
-      const alt = targets[Math.floor(R()*targets.length)];
+      const alt = targets[Math.floor(R()*targets.length)] || [x,y];
       tx = alt[0]; ty = alt[1];
       dx = tx - x; dy = ty - y; dist = Math.hypot(dx,dy) || 1;
     }
     const ux = dx/dist, uy = dy/dist;
 
-    // Very brief leak-out from the vessel, then target-biased random walk.
     const outward = k<10 ? 0.18*(1-k/10) : 0;
     const toward = tp==="hcc" ? 0.16 : 0.11;
 
@@ -1181,14 +1179,12 @@ function makeLeakWalk(tp,idx){
     let xx=x+vx, yy=y+vy;
     if(!validEES(tp,xx,yy)){
       let ok=false;
-      // Search around the current location in many directions so particles can
-      // move around stromal / cellular obstacles rather than appearing trapped.
-      const rMax = tp==="hcc" ? 4.5 : 5.8;
-      const rStep = tp==="hcc" ? 0.35 : 0.45;
+      const rMax = tp==="hcc" ? 4.2 : 5.2;
+      const rStep = tp==="hcc" ? 0.42 : 0.55;
       for(let rad=0.45; rad<=rMax; rad+=rStep){
         const base = Math.atan2(uy,ux);
-        for(let q=0;q<32;q++){
-          const ang = base + (q/32)*Math.PI*2 + (R()-0.5)*0.10;
+        for(let q=0;q<20;q++){
+          const ang = base + (q/20)*Math.PI*2 + (R()-0.5)*0.10;
           const px = x + Math.cos(ang)*rad;
           const py = y + Math.sin(ang)*rad;
           if(validEES(tp,px,py)){
@@ -1211,16 +1207,32 @@ function makeLeakWalk(tp,idx){
   return {st,out};
 }
 
-const eesTargets = {
-  hcc: makeEESTargets("hcc", 10, 10, 16, 3101),
-  ccc: makeEESTargets("ccc", 12, 12, 18, 4201)
-};
+const eesTargetsCache = Object.create(null);
+const leakPoolsCache = Object.create(null);
 
-const leakPools = {
-  hcc:Array.from({length:2200},(_,i)=>makeLeakWalk("hcc",i)),
-  hem:Array.from({length:12},(_,i)=>makeLeakWalk("hem",i)),
-  ccc:Array.from({length:2600},(_,i)=>makeLeakWalk("ccc",i))
-};
+function ensureEESTargets(tp){
+  if(tp==="hem") return [];
+  if(!eesTargetsCache[tp]){
+    eesTargetsCache[tp] = tp==="hcc"
+      ? makeEESTargets("hcc", 8, 8, 12, 3101)
+      : makeEESTargets("ccc", 10, 10, 14, 4201);
+  }
+  return eesTargetsCache[tp];
+}
+
+function ensureLeakPool(tp){
+  if(leakPoolsCache[tp]) return leakPoolsCache[tp];
+  if(tp==="hem"){
+    leakPoolsCache[tp] = Array.from({length:18},(_,i)=>makeLeakWalk("hem",i));
+  }else if(tp==="hcc"){
+    ensureEESTargets("hcc");
+    leakPoolsCache[tp] = Array.from({length:150},(_,i)=>makeLeakWalk("hcc",i));
+  }else if(tp==="ccc"){
+    ensureEESTargets("ccc");
+    leakPoolsCache[tp] = Array.from({length:190},(_,i)=>makeLeakWalk("ccc",i));
+  }
+  return leakPoolsCache[tp];
+}
 function sample(path,t){
   const m=path.length-2, i=clamp(Math.floor(t),0,m), q=t-i;
   const a=path[i], b=path[i+1];
@@ -1381,7 +1393,8 @@ function drawParticles(tp){
       : tp==="ccc"
         ? 10 + (i%120)*0.85
         : 12 + (i%40)*1.0;
-    const lp=leakPools[tp][i % leakPools[tp].length];
+    const pool = ensureLeakPool(tp);
+    const lp=pool[i % pool.length];
     const v=lp.st.v, a=lp.st.a;
     let p0, p1;
     if(lp.st.mode==="path" || lp.st.mode==="poly"){
@@ -1582,6 +1595,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
     type=btn.dataset.type;
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
     btn.classList.add("active");
+    ensureLeakPool(type);
     update();
   });
 });
@@ -1606,6 +1620,7 @@ slider.addEventListener("input",()=>{ time=Number(slider.value); update(); });
 window.addEventListener("resize",()=>drawGraph());
 
 update();
+setTimeout(()=>ensureLeakPool(type), 0);
 })();
 </script>
 </body>
