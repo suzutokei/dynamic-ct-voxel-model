@@ -184,7 +184,7 @@ const particleCurves = {
   liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
 };
 const bloodFracCurves = {
-  hcc:[[0,1],[30,0.70],[80,0.60],[180,0.56],[300,0.54]],
+  hcc:[[0,1],[30,0.58],[80,0.48],[180,0.42],[300,0.40]],
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
   ccc:[[0,1],[30,0.55],[80,0.24],[180,0.12],[300,0.08]]
 };
@@ -665,7 +665,7 @@ function generateData(){
     trabeculae:[],
     sinusoidPaths:[],
     vessels:[],
-    leakVisualSpeed:1.05, leakSpread:1.70, bloodJitter:0.55, bloodTemporal:0.20
+    leakVisualSpeed:1.90, leakSpread:1.70, bloodJitter:0.55, bloodTemporal:0.20
   };
   {
     const R=rng(101);
@@ -788,7 +788,7 @@ function generateData(){
       {cx:270, cy:154, rx:16, ry:10, rot:31},
       {cx:150, cy:360, rx:15, ry:10, rot:-22}
     ],
-    leakVisualSpeed:0.72, leakSpread:3.0, bloodJitter:0.82, bloodTemporal:0.14
+    leakVisualSpeed:1.12, leakSpread:3.0, bloodJitter:0.82, bloodTemporal:0.14
   };
   {
     const R=rng(303);
@@ -863,6 +863,9 @@ function insideCell(tp,x,y){
 function validEES(tp,x,y){
   if(tp==="hem"){
     return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,0);
+  }
+  if(tp==="hcc"){
+    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,2)&&!insideCell(tp,x,y);
   }
   return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,4)&&!insideCell(tp,x,y);
 }
@@ -1103,26 +1106,22 @@ function makeLeakWalk(tp,idx){
   const nx0 = st.nx || Math.cos(st.a);
   const ny0 = st.ny || Math.sin(st.a);
 
-  // Initial movement points away from the vessel wall.
-  let vx=nx0*0.55, vy=ny0*0.55;
+  // A brief initial outward push from the vessel wall.
+  let vx=nx0*0.50, vy=ny0*0.50;
   const out=[[x,y]];
-  const steps = tp==="ccc" ? 1800 : 1200;
 
-  // Correlated random walk:
-  // HCC: narrower/faster local diffusion
-  // CCC: broader but visually slower diffusion
-  const persistence = tp==="hcc" ? 0.63 : (tp==="ccc" ? 0.76 : 0.55);
-  const noise = tp==="hcc" ? 0.72 : (tp==="ccc" ? 0.58 : 0.42);
-  const maxStep = tp==="hcc" ? 1.75 : (tp==="ccc" ? 1.50 : 1.10);
+  const steps = tp==="hcc" ? 2600 : (tp==="ccc" ? 3600 : 1200);
+  const persistence = tp==="hcc" ? 0.36 : (tp==="ccc" ? 0.52 : 0.55);
+  const noise = tp==="hcc" ? 0.95 : (tp==="ccc" ? 0.72 : 0.42);
+  const maxStep = tp==="hcc" ? 1.15 : (tp==="ccc" ? 0.88 : 1.10);
 
   for(let k=0;k<steps;k++){
-    // Outward bias only immediately after leakage.
-    const outward = k<24 ? (0.34*(1-k/24)) : 0;
+    const outward = k<18 ? (0.40*(1-k/18)) : 0;
 
+    // Early outward leak, then mainly isotropic diffusion.
     vx = persistence*vx + nx0*outward + n4(R)*noise;
     vy = persistence*vy + ny0*outward + n4(R)*noise;
 
-    // Limit single-step speed so it never looks frantic.
     const sp=Math.hypot(vx,vy);
     if(sp>maxStep){
       vx*=maxStep/sp;
@@ -1132,12 +1131,11 @@ function makeLeakWalk(tp,idx){
     let xx=x+vx, yy=y+vy;
 
     if(!validEES(tp,xx,yy)){
-      // Reflect / redirect locally instead of jumping.
+      // Bounce locally and search alternate directions.
       let ok=false;
-      const base=Math.atan2(vy,vx);
-      for(let q=0;q<30;q++){
-        const ang = base + Math.PI*(0.45 + 1.10*R())*(R()<0.5?-1:1);
-        const step = (tp==="hcc" ? 0.55 : 0.48) + R()*(tp==="hcc" ? 0.70 : 0.58);
+      for(let q=0;q<36;q++){
+        const ang = R()*Math.PI*2;
+        const step = (tp==="hcc" ? 0.45 : 0.34) + R()*(tp==="hcc" ? 0.55 : 0.42);
         const tvx=Math.cos(ang)*step;
         const tvy=Math.sin(ang)*step;
         const tx=x+tvx, ty=y+tvy;
@@ -1146,9 +1144,8 @@ function makeLeakWalk(tp,idx){
         }
       }
       if(!ok){
-        // Stay put briefly and lose momentum.
         xx=x; yy=y;
-        vx*=0.25; vy*=0.25;
+        vx*=0.15; vy*=0.15;
       }
     }
 
@@ -1158,9 +1155,9 @@ function makeLeakWalk(tp,idx){
   return {st,out};
 }
 const leakPools = {
-  hcc:Array.from({length:420},(_,i)=>makeLeakWalk("hcc",i)),
+  hcc:Array.from({length:760},(_,i)=>makeLeakWalk("hcc",i)),
   hem:Array.from({length:12},(_,i)=>makeLeakWalk("hem",i)),
-  ccc:Array.from({length:520},(_,i)=>makeLeakWalk("ccc",i))
+  ccc:Array.from({length:920},(_,i)=>makeLeakWalk("ccc",i))
 };
 function sample(path,t){
   const m=path.length-2, i=clamp(Math.floor(t),0,m), q=t-i;
@@ -1346,8 +1343,8 @@ function drawParticles(tp){
       const p = sample(lp.out, t);
       drawContrastParticle(
         sctx,p[0],p[1],
-        tp==="ccc"?2.45:(tp==="hcc"?2.95:2.85),
-        tp==="ccc"?0.58:(tp==="hcc"?0.90:0.78)
+        tp==="ccc"?2.35:(tp==="hcc"?2.95:2.85),
+        tp==="ccc"?0.62:(tp==="hcc"?0.92:0.78)
       );
     }
   }
