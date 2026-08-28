@@ -1356,6 +1356,7 @@ function drawBackground(tp){
 function drawParticles(tp){
   const nb = bloodParticles(tp,time);
   const ne = eesParticles(tp,time);
+  const PARTICLE_R = 2.9;
 
   if(tp==="hcc"){
     // Exact-count rule:
@@ -1364,12 +1365,12 @@ function drawParticles(tp){
     // the integer particle count changes density without creating packets.
     for(let i=0;i<nb;i++){
       const p=bloodPos(tp,bloodPools.hcc[i],time);
-      drawContrastParticle(sctx,p[0],p[1],2.55,0.98);
+      drawContrastParticle(sctx,p[0],p[1],PARTICLE_R,0.98);
     }
   }else{
     for(let i=0;i<nb;i++){
       const p=bloodPos(tp,bloodPools[tp][i],time);
-      drawContrastParticle(sctx,p[0],p[1], tp==="hem"?3.05:3.0, 0.98);
+      drawContrastParticle(sctx,p[0],p[1],PARTICLE_R,0.98);
     }
   }
 
@@ -1392,7 +1393,7 @@ function drawParticles(tp){
     }
 
     if(time<birth){
-      drawContrastParticle(sctx,p0.x,p0.y,2.35,0.28);
+      drawContrastParticle(sctx,p0.x,p0.y,PARTICLE_R,0.28);
       continue;
     }
     const age=time-birth;
@@ -1403,7 +1404,7 @@ function drawParticles(tp){
       sctx.lineWidth=1.1;
       sctx.beginPath(); sctx.moveTo(p0.x,p0.y); sctx.lineTo(p1.x,p1.y); sctx.stroke();
       sctx.restore();
-      drawContrastParticle(sctx,x,y,tp==="hcc"?2.95:3.35,0.98);
+      drawContrastParticle(sctx,x,y,PARTICLE_R,0.98);
     }else{
       const maxAge = Math.max(1, 300 - birth - CROSS);
       const frac = clamp((age-CROSS)/maxAge, 0, 1);
@@ -1412,7 +1413,7 @@ function drawParticles(tp){
       const p = sample(lp.out, t);
       drawContrastParticle(
         sctx,p[0],p[1],
-        tp==="ccc"?2.28:(tp==="hcc"?3.05:2.85),
+        PARTICLE_R,
         tp==="ccc"?0.68:(tp==="hcc"?0.98:0.78)
       );
     }
