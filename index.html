@@ -184,7 +184,7 @@ const particleCurves = {
   liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
 };
 const bloodFracCurves = {
-  hcc:[[0,1],[30,0.82],[80,0.70],[180,0.66],[300,0.64]],
+  hcc:[[0,1],[30,0.78],[80,0.64],[180,0.60],[300,0.58]],
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
   ccc:[[0,1],[30,0.55],[80,0.24],[180,0.12],[300,0.08]]
 };
@@ -665,7 +665,7 @@ function generateData(){
     trabeculae:[],
     sinusoidPaths:[],
     vessels:[],
-    leakVisualSpeed:0.60, leakSpread:1.48, bloodJitter:0.55, bloodTemporal:0.20
+    leakVisualSpeed:0.64, leakSpread:1.70, bloodJitter:0.55, bloodTemporal:0.20
   };
   {
     const R=rng(101);
@@ -788,7 +788,7 @@ function generateData(){
       {cx:270, cy:154, rx:16, ry:10, rot:31},
       {cx:150, cy:360, rx:15, ry:10, rot:-22}
     ],
-    leakVisualSpeed:0.74, leakSpread:3.2, bloodJitter:0.82, bloodTemporal:0.14
+    leakVisualSpeed:0.66, leakSpread:3.0, bloodJitter:0.82, bloodTemporal:0.14
   };
   {
     const R=rng(303);
@@ -1190,9 +1190,9 @@ function makeLeakWalk(tp,idx){
   return {st,out};
 }
 const leakPools = {
-  hcc:Array.from({length:240},(_,i)=>makeLeakWalk("hcc",i)),
+  hcc:Array.from({length:320},(_,i)=>makeLeakWalk("hcc",i)),
   hem:Array.from({length:12},(_,i)=>makeLeakWalk("hem",i)),
-  ccc:Array.from({length:340},(_,i)=>makeLeakWalk("ccc",i))
+  ccc:Array.from({length:420},(_,i)=>makeLeakWalk("ccc",i))
 };
 function sample(path,t){
   const m=path.length-2, i=clamp(Math.floor(t),0,m), q=t-i;
@@ -1376,7 +1376,7 @@ function drawParticles(tp){
     }else{
       const t = Math.min(890,(age-CROSS)*cfg[tp].leakVisualSpeed);
       const p = disperseEESPoint(tp, lp, t, i, age);
-      drawContrastParticle(sctx,p[0],p[1], tp==="ccc"?2.55:(tp==="hcc"?2.85:2.85), tp==="ccc"?0.60:(tp==="hcc"?0.88:0.78));
+      drawContrastParticle(sctx,p[0],p[1], tp==="ccc"?2.45:(tp==="hcc"?2.95:2.85), tp==="ccc"?0.56:(tp==="hcc"?0.90:0.78));
     }
   }
   return nb+ne;
@@ -1386,7 +1386,6 @@ function disperseEESPoint(tp, lp, t, idx, age){
   const p = sample(lp.out, t);
   if(tp==="hem") return p;
 
-  // Local tangent/normal from neighboring path samples
   const pPrev = sample(lp.out, Math.max(0, t-3.0));
   const pNext = sample(lp.out, Math.min(lp.out.length-1.01, t+3.0));
   let tx = pNext[0]-pPrev[0], ty = pNext[1]-pPrev[1];
@@ -1394,33 +1393,47 @@ function disperseEESPoint(tp, lp, t, idx, age){
   tx/=len; ty/=len;
   const nx = -ty, ny = tx;
 
-  // Deterministic particle-specific phase so particles separate rather than clump.
-  const phase = idx*1.6180339887 + (tp==="ccc" ? age*0.012 : age*0.020);
-  const speedShift = (Math.sin(idx*12.9898)*43758.5453)%1;
-  const signed = speedShift - Math.floor(speedShift) - 0.5;
+  // deterministic particle-specific phases
+  const ph1 = idx*1.731 + age*0.019;
+  const ph2 = idx*0.913 + age*0.013;
+  const ph3 = idx*2.417 + age*0.011;
 
-  // Along-track spread + gentle lateral spread that grows with age.
-  const t2 = t + signed*(tp==="ccc" ? 10.0 : 7.0);
-  const q = sample(lp.out, Math.max(0, Math.min(lp.out.length-1.01, t2)));
-
-  let radius, alongAmp, swirl;
+  // Use a local center that moves slowly outward at first, then stabilizes.
+  let cx, cy, rN, rT;
   if(tp==="hcc"){
-    radius = Math.min(7.0, 0.8 + age*0.020);
-    alongAmp = 0.6 + Math.min(1.2, age*0.006);
-    swirl = 0.35;
+    const nxo = lp.st.nx || Math.cos(lp.st.a);
+    const nyo = lp.st.ny || Math.sin(lp.st.a);
+    const outward = Math.min(12.5, 3.2 + Math.sqrt(Math.max(0,age))*1.15);
+    cx = lp.st.x + nxo*outward;
+    cy = lp.st.y + nyo*outward;
+    // diffusion radius grows with sqrt(time): true diffusion-like broadening
+    const sigma = Math.min(11.0, 1.6 + Math.sqrt(Math.max(0,age))*0.62);
+    rN = sigma*(0.95*Math.sin(ph1) + 0.35*Math.sin(ph2));
+    rT = (0.8 + Math.min(2.3, Math.sqrt(Math.max(0,age))*0.18))*(0.9*Math.cos(ph2) + 0.25*Math.sin(ph3));
   }else{ // ccc
-    radius = Math.min(10.0, 1.2 + age*0.026);
-    alongAmp = 0.9 + Math.min(1.8, age*0.008);
-    swirl = 0.16; // calmer than HCC
+    const nxo = Math.cos(lp.st.a), nyo = Math.sin(lp.st.a);
+    const outward = Math.min(30, 6.0 + Math.sqrt(Math.max(0,age))*1.6);
+    cx = lp.st.x + nxo*outward;
+    cy = lp.st.y + nyo*outward;
+    const sigma = Math.min(20.0, 2.0 + Math.sqrt(Math.max(0,age))*0.95);
+    // calmer, broader seepage
+    rN = sigma*(0.80*Math.sin(ph1) + 0.22*Math.sin(ph2));
+    rT = (1.2 + Math.min(3.0, Math.sqrt(Math.max(0,age))*0.22))*(0.75*Math.cos(ph2) + 0.18*Math.sin(ph3));
   }
 
-  const offN = Math.sin(phase)*radius + Math.sin(phase*0.47)*swirl*radius;
-  const offT = Math.cos(phase*0.83)*alongAmp;
-
-  const x = q[0] + nx*offN + tx*offT;
-  const y = q[1] + ny*offN + ty*offT;
+  const x = cx + nx*rN + tx*rT;
+  const y = cy + ny*rN + ty*rT;
 
   if(validEES(tp,x,y)) return [x,y];
+
+  // fallback: search a little around the center rather than sticking to one path.
+  for(let q=0;q<24;q++){
+    const a = (q/24)*Math.PI*2 + ph1*0.37;
+    const rr = (tp==="hcc"? 2.0+q*0.28 : 3.0+q*0.48);
+    const xx = cx + Math.cos(a)*rr;
+    const yy = cy + Math.sin(a)*rr;
+    if(validEES(tp,xx,yy)) return [xx,yy];
+  }
   return p;
 }
 
