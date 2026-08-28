@@ -184,9 +184,9 @@ const particleCurves = {
   liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
 };
 const bloodFracCurves = {
-  hcc:[[0,1],[30,0.52],[80,0.40],[180,0.34],[300,0.32]],
+  hcc:[[0,1],[30,0.46],[80,0.32],[180,0.26],[300,0.24]],
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
-  ccc:[[0,1],[30,0.55],[80,0.24],[180,0.12],[300,0.08]]
+  ccc:[[0,1],[30,0.48],[80,0.18],[180,0.08],[300,0.05]]
 };
 const totalParticleValue = (tp,t)=>curve(particleCurves[tp],t);
 const bloodParticleValue = (tp,t)=>totalParticleValue(tp,t)*curve(bloodFracCurves[tp],t);
@@ -665,7 +665,7 @@ function generateData(){
     trabeculae:[],
     sinusoidPaths:[],
     vessels:[],
-    leakVisualSpeed:2.90, leakSpread:1.70, bloodJitter:0.55, bloodTemporal:0.20
+    leakVisualSpeed:1.20, leakSpread:1.70, bloodJitter:0.55, bloodTemporal:0.20
   };
   {
     const R=rng(101);
@@ -788,7 +788,7 @@ function generateData(){
       {cx:270, cy:154, rx:16, ry:10, rot:31},
       {cx:150, cy:360, rx:15, ry:10, rot:-22}
     ],
-    leakVisualSpeed:1.70, leakSpread:3.0, bloodJitter:0.82, bloodTemporal:0.14
+    leakVisualSpeed:0.95, leakSpread:3.0, bloodJitter:0.82, bloodTemporal:0.14
   };
   {
     const R=rng(303);
@@ -865,10 +865,10 @@ function validEES(tp,x,y){
     return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,0);
   }
   if(tp==="hcc"){
-    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,1.0)&&!insideCell(tp,x,y);
+    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,0.4)&&!insideCell(tp,x,y);
   }
   if(tp==="ccc"){
-    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,2.0)&&!insideCell(tp,x,y);
+    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,1.0)&&!insideCell(tp,x,y);
   }
   return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,4)&&!insideCell(tp,x,y);
 }
@@ -1108,16 +1108,18 @@ function makeLeakWalk(tp,idx){
   let x=st.x, y=st.y;
   const nx0 = st.nx || Math.cos(st.a);
   const ny0 = st.ny || Math.sin(st.a);
-  let vx=nx0*0.42, vy=ny0*0.42;
+  let vx=nx0*0.35, vy=ny0*0.35;
   const out=[[x,y]];
 
-  const steps = tp==="hcc" ? 3200 : (tp==="ccc" ? 4200 : 1200);
-  const persistence = tp==="hcc" ? 0.20 : (tp==="ccc" ? 0.28 : 0.55);
-  const noise = tp==="hcc" ? 1.05 : (tp==="ccc" ? 0.78 : 0.42);
-  const maxStep = tp==="hcc" ? 1.05 : (tp==="ccc" ? 0.80 : 1.10);
+  const steps = tp==="hcc" ? 2400 : (tp==="ccc" ? 3200 : 1200);
+  const persistence = tp==="hcc" ? 0.12 : (tp==="ccc" ? 0.18 : 0.55);
+  const noise = tp==="hcc" ? 1.10 : (tp==="ccc" ? 0.92 : 0.42);
+  const maxStep = tp==="hcc" ? 1.25 : (tp==="ccc" ? 0.98 : 1.10);
 
   for(let k=0;k<steps;k++){
-    const outward = k<14 ? (0.28*(1-k/14)) : 0;
+    const outward = k<12 ? (0.24*(1-k/12)) : 0;
+
+    // very brief outward leak, then mostly isotropic diffusion
     vx = persistence*vx + nx0*outward + n4(R)*noise;
     vy = persistence*vy + ny0*outward + n4(R)*noise;
 
@@ -1127,22 +1129,26 @@ function makeLeakWalk(tp,idx){
     let xx=x+vx, yy=y+vy;
     if(!validEES(tp,xx,yy)){
       let ok=false;
-      // wide radial search so particles do not appear stuck on septa/fibrosis
-      for(let rad=0.45; rad<=(tp==="hcc"?3.0:4.6); rad+=(tp==="hcc"?0.26:0.34)){
+      // search many directions to keep the walk flowing around obstacles
+      const rMax = tp==="hcc" ? 3.6 : 5.2;
+      const rStep = tp==="hcc" ? 0.28 : 0.34;
+      for(let rad=0.45; rad<=rMax; rad+=rStep){
         const base=R()*Math.PI*2;
-        for(let q=0;q<24;q++){
-          const ang=base + (q/24)*Math.PI*2;
+        for(let q=0;q<32;q++){
+          const ang=base + (q/32)*Math.PI*2;
           const tx=x+Math.cos(ang)*rad;
           const ty=y+Math.sin(ang)*rad;
           if(validEES(tp,tx,ty)){
-            xx=tx; yy=ty; vx=(tx-x)*0.70; vy=(ty-y)*0.70; ok=true; break;
+            xx=tx; yy=ty;
+            vx=(tx-x)*0.55; vy=(ty-y)*0.55;
+            ok=true; break;
           }
         }
         if(ok) break;
       }
       if(!ok){
-        // As a last resort, stay only briefly and lose momentum.
-        xx=x; yy=y; vx*=0.10; vy*=0.10;
+        xx=x; yy=y;
+        vx*=0.08; vy*=0.08;
       }
     }
 
@@ -1152,9 +1158,9 @@ function makeLeakWalk(tp,idx){
   return {st,out};
 }
 const leakPools = {
-  hcc:Array.from({length:1100},(_,i)=>makeLeakWalk("hcc",i)),
+  hcc:Array.from({length:1500},(_,i)=>makeLeakWalk("hcc",i)),
   hem:Array.from({length:12},(_,i)=>makeLeakWalk("hem",i)),
-  ccc:Array.from({length:1400},(_,i)=>makeLeakWalk("ccc",i))
+  ccc:Array.from({length:1900},(_,i)=>makeLeakWalk("ccc",i))
 };
 function sample(path,t){
   const m=path.length-2, i=clamp(Math.floor(t),0,m), q=t-i;
@@ -1336,7 +1342,10 @@ function drawParticles(tp){
       sctx.restore();
       drawContrastParticle(sctx,x,y,tp==="hcc"?2.95:3.35,0.98);
     }else{
-      const t = Math.min(lp.out.length-1.01,(age-CROSS)*cfg[tp].leakVisualSpeed);
+      const maxAge = Math.max(1, 300 - birth - CROSS);
+      const frac = clamp((age-CROSS)/maxAge, 0, 1);
+      // Nonlinear time mapping: reach broad distribution earlier, then continue to widen.
+      const t = Math.min(lp.out.length-1.01, Math.pow(frac, 0.80) * (lp.out.length-1.01));
       const p = sample(lp.out, t);
       drawContrastParticle(
         sctx,p[0],p[1],
