@@ -184,7 +184,7 @@ const particleCurves = {
   liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
 };
 const bloodFracCurves = {
-  hcc:[[0,1],[30,0.96],[80,0.92],[180,0.86],[300,0.82]],
+  hcc:[[0,1],[30,0.90],[80,0.84],[180,0.80],[300,0.78]],
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
   ccc:[[0,1],[30,0.55],[80,0.24],[180,0.12],[300,0.08]]
 };
@@ -665,7 +665,7 @@ function generateData(){
     trabeculae:[],
     sinusoidPaths:[],
     vessels:[],
-    leakVisualSpeed:0.58, leakSpread:1.55, bloodJitter:0.55, bloodTemporal:0.20
+    leakVisualSpeed:0.52, leakSpread:1.22, bloodJitter:0.55, bloodTemporal:0.20
   };
   {
     const R=rng(101);
@@ -1101,19 +1101,41 @@ function makeLeakWalk(tp,idx){
   let x=st.x, y=st.y, vx=.38*Math.cos(st.a), vy=.38*Math.sin(st.a);
   const out=[[x,y]];
   const steps = tp==="ccc" ? 1500 : 900;
-  const mem = tp==="ccc" ? 0.18 : 0.24;
-  const bounce = tp==="ccc" ? 0.58 : 0.68;
+  const mem = tp==="ccc" ? 0.18 : (tp==="hcc" ? 0.62 : 0.24);
+  const bounce = tp==="ccc" ? 0.58 : (tp==="hcc" ? 0.44 : 0.68);
 
   for(let s=0;s<steps;s++){
-    vx=mem*vx + n4(R)*cfg[tp].leakSpread;
-    vy=mem*vy + n4(R)*cfg[tp].leakSpread;
+    if(tp==="hcc"){
+      // Leak from the sinusoid wall into the narrow EES:
+      // stronger initial outward bias, then gradual diffusion with small random spread.
+      const nx0 = st.nx || Math.cos(st.a);
+      const ny0 = st.ny || Math.sin(st.a);
+      const drift = s < 70 ? 0.22 : (s < 180 ? 0.12 : 0.06);
+      const diff = s < 100 ? cfg[tp].leakSpread*0.42 : cfg[tp].leakSpread*0.26;
+      const tang = cfg[tp].leakSpread*0.10;
+      const tx = -ny0, ty = nx0;
+
+      vx = mem*vx + nx0*drift + tx*n4(R)*tang + n4(R)*diff;
+      vy = mem*vy + ny0*drift + ty*n4(R)*tang + n4(R)*diff;
+    }else{
+      vx=mem*vx + n4(R)*cfg[tp].leakSpread;
+      vy=mem*vy + n4(R)*cfg[tp].leakSpread;
+    }
 
     let nx=x+vx, ny=y+vy;
     if(!validEES(tp,nx,ny)){
       let ok=false;
       for(let q=0;q<48;q++){
-        vx=n4(R)*cfg[tp].leakSpread*bounce;
-        vy=n4(R)*cfg[tp].leakSpread*bounce;
+        if(tp==="hcc"){
+          const nx0 = st.nx || Math.cos(st.a);
+          const ny0 = st.ny || Math.sin(st.a);
+          const tx = -ny0, ty = nx0;
+          vx = nx0*(0.10+R()*0.08) + tx*n4(R)*cfg[tp].leakSpread*0.10 + n4(R)*cfg[tp].leakSpread*0.18;
+          vy = ny0*(0.10+R()*0.08) + ty*n4(R)*cfg[tp].leakSpread*0.10 + n4(R)*cfg[tp].leakSpread*0.18;
+        }else{
+          vx=n4(R)*cfg[tp].leakSpread*bounce;
+          vy=n4(R)*cfg[tp].leakSpread*bounce;
+        }
         nx=x+vx; ny=y+vy;
         if(validEES(tp,nx,ny)){ ok=true; break; }
       }
@@ -1302,14 +1324,14 @@ function drawParticles(tp){
     if(age<CROSS){
       const q=age/CROSS, x=p0.x*(1-q)+p1.x*q, y=p0.y*(1-q)+p1.y*q;
       sctx.save();
-      sctx.strokeStyle="rgba(37,99,235,"+(tp==="ccc"?"0.09":"0.13")+")";
+      sctx.strokeStyle="rgba(37,99,235,"+(tp==="ccc"?"0.09":(tp==="hcc"?"0.18":"0.13"))+")";
       sctx.lineWidth=1.1;
       sctx.beginPath(); sctx.moveTo(p0.x,p0.y); sctx.lineTo(p1.x,p1.y); sctx.stroke();
       sctx.restore();
-      drawContrastParticle(sctx,x,y,tp==="hcc"?2.75:3.35,0.98);
+      drawContrastParticle(sctx,x,y,tp==="hcc"?2.95:3.35,0.98);
     }else{
       const p=sample(lp.out, Math.min(890,(age-CROSS)*cfg[tp].leakVisualSpeed));
-      drawContrastParticle(sctx,p[0],p[1], tp==="ccc"?2.75:(tp==="hcc"?2.45:2.85), tp==="ccc"?0.72:(tp==="hcc"?0.70:0.78));
+      drawContrastParticle(sctx,p[0],p[1], tp==="ccc"?2.75:(tp==="hcc"?2.55:2.85), tp==="ccc"?0.72:(tp==="hcc"?0.76:0.78));
     }
   }
   return nb+ne;
