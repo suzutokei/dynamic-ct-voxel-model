@@ -184,9 +184,9 @@ const particleCurves = {
   liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
 };
 const bloodFracCurves = {
-  hcc:[[0,1],[30,0.40],[80,0.26],[180,0.20],[300,0.18]],
+  hcc:[[0,1],[30,0.52],[80,0.38],[180,0.32],[300,0.30]],
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
-  ccc:[[0,1],[30,0.36],[80,0.10],[180,0.04],[300,0.02]]
+  ccc:[[0,1],[30,0.26],[80,0.06],[180,0.02],[300,0.01]]
 };
 const totalParticleValue = (tp,t)=>curve(particleCurves[tp],t);
 const bloodParticleValue = (tp,t)=>totalParticleValue(tp,t)*curve(bloodFracCurves[tp],t);
@@ -865,10 +865,10 @@ function validEES(tp,x,y){
     return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,0);
   }
   if(tp==="hcc"){
-    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,0.20)&&!insideCell(tp,x,y);
+    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,0.35)&&!insideCell(tp,x,y);
   }
   if(tp==="ccc"){
-    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,0.55)&&!insideCell(tp,x,y);
+    return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,0.10)&&!insideCell(tp,x,y);
   }
   return x>18&&x<482&&y>18&&y<482&&!insideVessel(tp,x,y,4)&&!insideCell(tp,x,y);
 }
@@ -1058,7 +1058,7 @@ function makeEESTargets(tp, cols, rows, attemptsPerCell=18, seed=1){
     }
   }
   // add some extra random targets to avoid grid impression
-  let extras = tp==="hcc" ? 90 : 140;
+  let extras = tp==="hcc" ? 50 : 220;
   while(extras-- > 0){
     const x = 22 + R()*456;
     const y = 22 + R()*456;
@@ -1151,16 +1151,16 @@ function makeLeakWalk(tp,idx){
   let vx=nx0*0.32, vy=ny0*0.32;
   const out=[[x,y]];
 
-  // Much lighter than before, but still long enough to show spread.
-  const steps = tp==="hcc" ? 700 : (tp==="ccc" ? 950 : 180);
-  const persistence = tp==="hcc" ? 0.22 : (tp==="ccc" ? 0.30 : 0.55);
-  const noise = tp==="hcc" ? 0.72 : (tp==="ccc" ? 0.55 : 0.42);
-  const maxStep = tp==="hcc" ? 1.10 : (tp==="ccc" ? 0.90 : 1.10);
+  // Keep the lightweight implementation, but accentuate the HCC/CCC difference.
+  const steps = tp==="hcc" ? 520 : (tp==="ccc" ? 1300 : 180);
+  const persistence = tp==="hcc" ? 0.20 : (tp==="ccc" ? 0.36 : 0.55);
+  const noise = tp==="hcc" ? 0.60 : (tp==="ccc" ? 0.62 : 0.42);
+  const maxStep = tp==="hcc" ? 0.92 : (tp==="ccc" ? 0.82 : 1.10);
 
   for(let k=0;k<steps;k++){
     let dx = tx - x, dy = ty - y;
     let dist = Math.hypot(dx,dy) || 1;
-    if(dist < (tp==="hcc" ? 10 : 14)){
+    if(dist < (tp==="hcc" ? 8 : 20)){
       const alt = targets[Math.floor(R()*targets.length)] || [x,y];
       tx = alt[0]; ty = alt[1];
       dx = tx - x; dy = ty - y; dist = Math.hypot(dx,dy) || 1;
@@ -1168,7 +1168,7 @@ function makeLeakWalk(tp,idx){
     const ux = dx/dist, uy = dy/dist;
 
     const outward = k<10 ? 0.18*(1-k/10) : 0;
-    const toward = tp==="hcc" ? 0.16 : 0.11;
+    const toward = tp==="hcc" ? 0.12 : 0.16;
 
     vx = persistence*vx + nx0*outward + ux*toward + n4(R)*noise;
     vy = persistence*vy + ny0*outward + uy*toward + n4(R)*noise;
@@ -1179,8 +1179,8 @@ function makeLeakWalk(tp,idx){
     let xx=x+vx, yy=y+vy;
     if(!validEES(tp,xx,yy)){
       let ok=false;
-      const rMax = tp==="hcc" ? 4.2 : 5.2;
-      const rStep = tp==="hcc" ? 0.42 : 0.55;
+      const rMax = tp==="hcc" ? 3.8 : 6.2;
+      const rStep = tp==="hcc" ? 0.42 : 0.62;
       for(let rad=0.45; rad<=rMax; rad+=rStep){
         const base = Math.atan2(uy,ux);
         for(let q=0;q<20;q++){
@@ -1214,8 +1214,8 @@ function ensureEESTargets(tp){
   if(tp==="hem") return [];
   if(!eesTargetsCache[tp]){
     eesTargetsCache[tp] = tp==="hcc"
-      ? makeEESTargets("hcc", 8, 8, 12, 3101)
-      : makeEESTargets("ccc", 10, 10, 14, 4201);
+      ? makeEESTargets("hcc", 7, 7, 10, 3101)
+      : makeEESTargets("ccc", 12, 12, 16, 4201);
   }
   return eesTargetsCache[tp];
 }
@@ -1226,10 +1226,10 @@ function ensureLeakPool(tp){
     leakPoolsCache[tp] = Array.from({length:18},(_,i)=>makeLeakWalk("hem",i));
   }else if(tp==="hcc"){
     ensureEESTargets("hcc");
-    leakPoolsCache[tp] = Array.from({length:150},(_,i)=>makeLeakWalk("hcc",i));
+    leakPoolsCache[tp] = Array.from({length:140},(_,i)=>makeLeakWalk("hcc",i));
   }else if(tp==="ccc"){
     ensureEESTargets("ccc");
-    leakPoolsCache[tp] = Array.from({length:190},(_,i)=>makeLeakWalk("ccc",i));
+    leakPoolsCache[tp] = Array.from({length:240},(_,i)=>makeLeakWalk("ccc",i));
   }
   return leakPoolsCache[tp];
 }
@@ -1389,9 +1389,9 @@ function drawParticles(tp){
   const CROSS=10;
   for(let i=0;i<ne;i++){
     const birth = tp==="hcc"
-      ? 8 + (i%90)*0.75
+      ? 8 + (i%84)*0.78
       : tp==="ccc"
-        ? 10 + (i%120)*0.85
+        ? 10 + (i%150)*0.95
         : 12 + (i%40)*1.0;
     const pool = ensureLeakPool(tp);
     const lp=pool[i % pool.length];
@@ -1421,8 +1421,10 @@ function drawParticles(tp){
     }else{
       const maxAge = Math.max(1, 300 - birth - CROSS);
       const frac = clamp((age-CROSS)/maxAge, 0, 1);
-      // Use almost the full trajectory by delayed phase so the cloud visibly occupies the voxel.
-      const t = Math.min(lp.out.length-1.01, Math.pow(frac, 0.72) * (lp.out.length-1.01));
+      // HCC remains more localized; CCC progressively fills the wider stromal space.
+      const span = tp==="ccc" ? 1.00 : (tp==="hcc" ? 0.72 : 0.86);
+      const expo = tp==="ccc" ? 0.58 : (tp==="hcc" ? 0.92 : 0.72);
+      const t = Math.min(lp.out.length-1.01, Math.pow(frac, expo) * span * (lp.out.length-1.01));
       const p = sample(lp.out, t);
       drawContrastParticle(
         sctx,p[0],p[1],
