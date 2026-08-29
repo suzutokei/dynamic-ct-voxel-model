@@ -1464,148 +1464,153 @@ function resizeGraphCanvas(){
 function drawGraph(){
   const dims=resizeGraphCanvas();
   const W=dims.W,H=dims.H,compact=dims.compact;
-  const L=compact?58:72, R=compact?18:26, T=compact?22:24, B=compact?56:60;
-  const phaseBarH = compact?20:22;
-  const plotTop = T + phaseBarH + 10;
+  const L=compact?58:72, R=compact?20:28, T=compact?22:24, B=compact?58:62;
+  const phaseBarH=compact?19:21;
+  const plotTop=T+phaseBarH+10;
   const min=35, max=175;
-  const X=x=>L+x/300*(W-L-R), Y=y=>plotTop+(max-y)/(max-min)*(H-plotTop-B);
+  const X=x=>L+x/300*(W-L-R);
+  const Y=y=>plotTop+(max-y)/(max-min)*(H-plotTop-B);
 
   gctx.clearRect(0,0,W,H);
   gctx.fillStyle="#ffffff";
   gctx.fillRect(0,0,W,H);
 
-  // Plot background
-  gctx.fillStyle="#fcfcfd";
-  gctx.fillRect(L, plotTop, W-L-R, H-plotTop-B);
+  // clean plotting field
+  gctx.fillStyle="#fdfdfd";
+  gctx.fillRect(L,plotTop,W-L-R,H-plotTop-B);
 
-  // Phase bar above the plot: clear but restrained.
-  const phaseBands = [
-    [0,40,compact?"動脈":"動脈相","rgba(226,236,248,0.95)"],
-    [40,100,compact?"門脈":"門脈相","rgba(228,240,233,0.95)"],
-    [100,180,compact?"平衡":"平衡相","rgba(238,233,246,0.96)"],
-    [180,300,compact?"遅延":"遅延相","rgba(242,244,247,0.98)"]
+  // quiet phase header
+  const phaseBands=[
+    [0,40,compact?"動脈":"動脈相","rgba(229,237,247,0.72)"],
+    [40,100,compact?"門脈":"門脈相","rgba(231,240,234,0.72)"],
+    [100,180,compact?"平衡":"平衡相","rgba(239,235,246,0.72)"],
+    [180,300,compact?"遅延":"遅延相","rgba(244,245,247,0.82)"]
   ];
   phaseBands.forEach(([a,b,label,color])=>{
-    const x0=X(a), x1=X(b);
+    const x0=X(a),x1=X(b);
     gctx.fillStyle=color;
-    gctx.fillRect(x0, T, x1-x0, phaseBarH);
-    gctx.strokeStyle="rgba(148,163,184,0.42)";
-    gctx.lineWidth=1;
-    gctx.strokeRect(x0, T, x1-x0, phaseBarH);
-    gctx.fillStyle="#334155";
-    gctx.font=(compact?"700 10px ":"700 11px ")+"-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
+    gctx.fillRect(x0,T,x1-x0,phaseBarH);
+    gctx.strokeStyle="rgba(148,163,184,0.28)";
+    gctx.lineWidth=0.8;
+    gctx.strokeRect(x0,T,x1-x0,phaseBarH);
+    gctx.fillStyle="#475569";
+    gctx.font=(compact?"700 10px ":"700 10.8px ")+"-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
     gctx.textAlign="center";
     gctx.textBaseline="middle";
-    gctx.fillText(label, (x0+x1)/2, T + phaseBarH/2 + 0.5);
+    gctx.fillText(label,(x0+x1)/2,T+phaseBarH/2+0.3);
   });
 
-  // Minimal horizontal guide lines only.
+  // restrained horizontal guides
   [40,60,80,100,120,140,160].forEach(v=>{
     const y=Y(v);
-    gctx.strokeStyle="#eef2f6";
-    gctx.lineWidth=1;
+    gctx.strokeStyle="#f0f3f6";
+    gctx.lineWidth=0.8;
     gctx.beginPath();
     gctx.moveTo(L,y);
     gctx.lineTo(W-R,y);
     gctx.stroke();
 
-    gctx.fillStyle="#475569";
-    gctx.font="600 12px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
+    gctx.fillStyle="#596675";
+    gctx.font="600 11.5px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
     gctx.textAlign="right";
     gctx.textBaseline="middle";
-    gctx.fillText(String(v), L-10, y);
+    gctx.fillText(String(v),L-10,y);
   });
 
-  // Bottom tick marks only.
+  // x ticks only; no full vertical grid
   [0,50,100,150,200,250,300].forEach(v=>{
     const x=X(v);
     gctx.strokeStyle="#cbd5e1";
-    gctx.lineWidth=1;
+    gctx.lineWidth=0.9;
     gctx.beginPath();
     gctx.moveTo(x,H-B);
-    gctx.lineTo(x,H-B+6);
+    gctx.lineTo(x,H-B+5);
     gctx.stroke();
 
-    gctx.fillStyle="#475569";
-    gctx.font="600 12px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
+    gctx.fillStyle="#596675";
+    gctx.font="600 11.5px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
     gctx.textAlign="center";
     gctx.textBaseline="alphabetic";
-    // Nudge the end labels inward a bit so they never fight with the axis label.
-    const xx = v===0 ? x+4 : (v===300 ? x-4 : x);
-    gctx.fillText(String(v), xx, H-B+20);
+    const xx=v===0?x+4:(v===300?x-5:x);
+    gctx.fillText(String(v),xx,H-B+19);
   });
 
-  // Phase boundaries inside the plot: subtle reference only.
+  // phase boundaries only
   [40,100,180].forEach(v=>{
     const x=X(v);
-    gctx.strokeStyle="#dde5ed";
-    gctx.lineWidth=1;
+    gctx.strokeStyle="rgba(148,163,184,0.28)";
+    gctx.lineWidth=0.8;
     gctx.beginPath();
     gctx.moveTo(x,plotTop);
     gctx.lineTo(x,H-B);
     gctx.stroke();
   });
 
-  // Axes
+  // axes
   gctx.strokeStyle="#334155";
-  gctx.lineWidth=1.2;
+  gctx.lineWidth=1.15;
   gctx.beginPath();
   gctx.moveTo(L,plotTop);
   gctx.lineTo(L,H-B);
   gctx.lineTo(W-R,H-B);
   gctx.stroke();
 
-  // Axis labels
   gctx.fillStyle="#334155";
-  gctx.font="700 13px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
+  gctx.font="700 12.5px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
   gctx.textAlign="left";
   gctx.textBaseline="alphabetic";
-  gctx.fillText("CT値（HU）", compact?8:18, 18);
+  gctx.fillText("CT値（HU）",compact?8:18,18);
   gctx.textAlign="center";
-  gctx.fillText("時間（秒）", (L + (W-R))/2, H-12);
+  gctx.fillText("時間（秒）",(L+W-R)/2,H-11);
 
-  const colors = {
-    hcc:"#b84f63",
-    liver:"#52606f",
-    hem:"#5a8f86",
-    ccc:"#6d5aa8"
+  const colors={
+    hcc:"#a94e60",
+    liver:"#59636f",
+    hem:"#56877f",
+    ccc:"#665795"
   };
-  const order = ["hcc","liver","hem","ccc"];
 
-  order.forEach(tp=>{
+  function makePts(tp){
     const pts=[];
-    for(let x=0;x<=300;x+=2){
-      pts.push([X(x), Y(hu(tp,x))]);
-    }
-
-    const isPrimary = (tp===type || tp==="liver");
+    for(let x=0;x<=300;x+=1) pts.push([X(x),Y(hu(tp,x))]);
+    return pts;
+  }
+  function strokeCurve(tp,width,alpha){
+    const pts=makePts(tp);
     gctx.save();
     gctx.strokeStyle=colors[tp];
-    gctx.globalAlpha = isPrimary ? 0.98 : 0.20;
-    gctx.lineWidth = tp===type ? 2.2 : (tp==="liver" ? 1.8 : 1.05);
+    gctx.globalAlpha=alpha;
+    gctx.lineWidth=width;
     gctx.lineCap="round";
     gctx.lineJoin="round";
     gctx.setLineDash([]);
     gctx.beginPath();
-    gctx.moveTo(pts[0][0], pts[0][1]);
-    for(let i=1;i<pts.length;i++) gctx.lineTo(pts[i][0], pts[i][1]);
+    gctx.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++) gctx.lineTo(pts[i][0],pts[i][1]);
     gctx.stroke();
     gctx.restore();
-  });
+  }
 
-  // Current time marker
-  const cx=X(time), cy=Y(hu(type,time));
+  // Background curves first, deliberately subdued.
+  ["hcc","hem","ccc"].filter(tp=>tp!==type).forEach(tp=>strokeCurve(tp,0.95,0.16));
+  // Normal liver remains clearly readable but subordinate to the selected tumor.
+  strokeCurve("liver",1.55,0.78);
+  // Selected tumor on top.
+  strokeCurve(type,2.05,1.00);
+
+  // current time marker
+  const cx=X(time),cy=Y(hu(type,time));
   gctx.save();
-  gctx.strokeStyle="rgba(100,116,139,0.72)";
-  gctx.lineWidth=1.0;
-  gctx.setLineDash([4,4]);
+  gctx.strokeStyle="rgba(100,116,139,0.52)";
+  gctx.lineWidth=0.9;
+  gctx.setLineDash([3,4]);
   gctx.beginPath();
   gctx.moveTo(cx,plotTop);
   gctx.lineTo(cx,H-B);
   gctx.stroke();
   gctx.restore();
 
-  circle(gctx,cx,cy,compact?4.4:5.0,"#2563eb",1,"#ffffff",1.6);
+  circle(gctx,cx,cy,compact?4.2:4.7,"#2563eb",1,"#ffffff",1.5);
 }
 
 function update(){
