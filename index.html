@@ -178,16 +178,16 @@ function curve(points,t){
 }
 
 const particleCurves = {
-  // CT値 = 55 HU + ボクセル内造影剤粒子数
-  // 代表値: 30 s / 80 s / 180 s / 300 s
+  // 造影前は全病変を55 HUに正規化。CT値 = 55 HU + ボクセル内造影剤粒子数
+  // 代表値: 35 s / 80 s / 180 s / 300 s
   // HCC    125 / 100 /  87 /  82 HU
   // 血管腫 150 / 140 / 125 / 115 HU
-  // CCC     70 /  85 / 100 / 105 HU
-  // 正常肝  90 / 110 / 100 /  95 HU
+  // CCC     68 /  82 /  94 /  96 HU
+  // 正常肝  80 / 110 / 100 /  95 HU
   hcc:[[0,0],[8,6],[30,70],[80,45],[180,32],[300,27]],
   hem:[[0,0],[8,10],[30,95],[80,85],[180,70],[300,60]],
-  ccc:[[0,0],[8,2],[30,15],[80,30],[180,45],[300,50]],
-  liver:[[0,0],[8,5],[30,35],[80,55],[180,45],[300,40]]
+  ccc:[[0,0],[8,2],[35,13],[80,27],[180,39],[300,41]],
+  liver:[[0,0],[8,5],[35,25],[80,55],[180,45],[300,40]]
 };
 const bloodFracCurves = {
   // HCC: arterial hypervascularity; later phases remain partly intravascular
@@ -197,7 +197,7 @@ const bloodFracCurves = {
   hem:[[0,1],[30,1.000],[80,0.998],[180,0.996],[300,0.995]],
   // CCC: broad fibrous EES dominates delayed enhancement, while vessels retain
   // a visible minority of particles so vascular spaces do not look empty.
-  ccc:[[0,1],[30,0.45],[80,0.28],[180,0.20],[300,0.16]]
+  ccc:[[0,1],[35,0.45],[80,0.28],[180,0.20],[300,0.16]]
 };
 const totalParticleValue = (tp,t)=>curve(particleCurves[tp],t);
 const bloodParticleValue = (tp,t)=>totalParticleValue(tp,t)*curve(bloodFracCurves[tp],t);
