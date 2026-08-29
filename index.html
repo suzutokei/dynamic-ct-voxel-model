@@ -110,7 +110,7 @@ canvas{max-width:100%}
         </div>
         <canvas id="scene" width="500" height="500"></canvas>
 <div class="stat">
-          <div class="s1">ボクセル内造影剤粒子数</div>
+          <div class="s1">ボクセル内の造影剤粒子数</div>
           <div><span id="count" class="s2">0</span> <span style="font-size:14px;color:var(--muted)">個</span></div>
           
         </div>
@@ -160,7 +160,7 @@ const graph = document.getElementById("graph");
 const sctx = scene.getContext("2d");
 const gctx = graph.getContext("2d");
 const slider = document.getElementById("slider");
-const BASE_HU = 40;
+const BASE_HU = 55;
 let type = "hcc", time = 0, playing = false, last = 0, raf = 0;
 
 const phase = t => t<8 ? "造影前" : t<40 ? "動脈相" : t<100 ? "門脈相" : t<180 ? "平衡相" : "遅延相";
@@ -178,15 +178,25 @@ function curve(points,t){
 }
 
 const particleCurves = {
-  hcc:[[0,0],[8,5],[30,80],[80,60],[180,52],[300,49]],
-  hem:[[0,0],[8,8],[32,125],[100,105],[180,95],[300,85]],
-  ccc:[[0,0],[8,2],[30,18],[80,36],[180,62],[300,72]],
-  liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
+  // CT値 = BASE_HU + 造影剤粒子数
+  // BASE_HU = 55 HU
+  // 目標CT値（概略）:
+  // HCC    : 55 → 125 → 100 → 87 → 82
+  // 血管腫 : 55 → 150 → 140 → 125 → 115
+  // CCC    : 55 →  70 →  85 →100 →105
+  // 正常肝 : 55 →  90 → 110 →100 → 95
+  hcc:[[0,0],[8,6],[30,70],[80,45],[180,32],[300,27]],
+  hem:[[0,0],[8,10],[32,95],[100,85],[180,70],[300,60]],
+  ccc:[[0,0],[8,2],[30,15],[80,30],[180,45],[300,50]],
+  liver:[[0,0],[8,5],[30,35],[80,55],[180,45],[300,40]]
 };
 const bloodFracCurves = {
-  hcc:[[0,1],[30,0.52],[80,0.38],[180,0.32],[300,0.30]],
+  // HCC: early arterial hypervascularity with later washout; limited but visible EES spread.
+  hcc:[[0,1],[30,0.60],[80,0.46],[180,0.38],[300,0.34]],
+  // Hemangioma: overwhelmingly intravascular (blood-pool behavior).
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
-  ccc:[[0,1],[30,0.36],[80,0.14],[180,0.08],[300,0.06]]
+  // CCC: delayed enhancement from broad fibrous stroma, but vessels should not look empty.
+  ccc:[[0,1],[30,0.42],[80,0.25],[180,0.18],[300,0.15]]
 };
 const totalParticleValue = (tp,t)=>curve(particleCurves[tp],t);
 const bloodParticleValue = (tp,t)=>totalParticleValue(tp,t)*curve(bloodFracCurves[tp],t);
