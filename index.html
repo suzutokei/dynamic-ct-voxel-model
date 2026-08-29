@@ -180,13 +180,13 @@ function curve(points,t){
 const particleCurves = {
   hcc:[[0,0],[8,5],[30,80],[80,60],[180,52],[300,49]],
   hem:[[0,0],[8,8],[32,125],[100,105],[180,95],[300,85]],
-  ccc:[[0,0],[8,2],[30,15],[80,32],[180,58],[300,68]],
+  ccc:[[0,0],[8,2],[30,18],[80,36],[180,62],[300,72]],
   liver:[[0,0],[8,4],[30,38],[80,68],[180,60],[300,53]]
 };
 const bloodFracCurves = {
   hcc:[[0,1],[30,0.52],[80,0.38],[180,0.32],[300,0.30]],
   hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
-  ccc:[[0,1],[30,0.26],[80,0.06],[180,0.02],[300,0.01]]
+  ccc:[[0,1],[30,0.36],[80,0.14],[180,0.08],[300,0.06]]
 };
 const totalParticleValue = (tp,t)=>curve(particleCurves[tp],t);
 const bloodParticleValue = (tp,t)=>totalParticleValue(tp,t)*curve(bloodFracCurves[tp],t);
@@ -786,7 +786,9 @@ function generateData(){
       {cx:124, cy:112, rx:18, ry:12, rot:18},
       {cx:360, cy:302, rx:21, ry:13, rot:-12},
       {cx:270, cy:154, rx:16, ry:10, rot:31},
-      {cx:150, cy:360, rx:15, ry:10, rot:-22}
+      {cx:150, cy:360, rx:15, ry:10, rot:-22},
+      {cx:400, cy:170, rx:13, ry:9, rot:24},
+      {cx:228, cy:398, rx:12, ry:8, rot:-8}
     ],
     leakVisualSpeed:0.95, leakSpread:3.0, bloodJitter:0.82, bloodTemporal:0.14
   };
