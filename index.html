@@ -110,7 +110,7 @@ canvas{max-width:100%}
         </div>
         <canvas id="scene" width="500" height="500"></canvas>
 <div class="stat">
-          <div class="s1">ボクセル内の造影剤粒子数</div>
+          <div class="s1">ボクセル内造影剤粒子数</div>
           <div><span id="count" class="s2">0</span> <span style="font-size:14px;color:var(--muted)">個</span></div>
           
         </div>
@@ -163,7 +163,7 @@ const slider = document.getElementById("slider");
 const BASE_HU = 55;
 let type = "hcc", time = 0, playing = false, last = 0, raf = 0;
 
-const phase = t => t<8 ? "造影前" : t<40 ? "動脈相" : t<100 ? "門脈相" : t<180 ? "平衡相" : "遅延相";
+const phase = t => t<8 ? "造影前" : t<58 ? "後期動脈相" : t<130 ? "門脈相" : "遅延相";
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 function rng(seed){let s=seed>>>0; return ()=>((s=Math.imul(1664525,s)+1013904223>>>0)/4294967296);}
 function n4(R){return (R()+R()+R()+R()-2)*1.1;}
@@ -178,25 +178,26 @@ function curve(points,t){
 }
 
 const particleCurves = {
-  // CT値 = BASE_HU + 造影剤粒子数
-  // BASE_HU = 55 HU
-  // 目標CT値（概略）:
-  // HCC    : 55 → 125 → 100 → 87 → 82
-  // 血管腫 : 55 → 150 → 140 → 125 → 115
-  // CCC    : 55 →  70 →  85 →100 →105
-  // 正常肝 : 55 →  90 → 110 →100 → 95
+  // CT値 = 55 HU + ボクセル内造影剤粒子数
+  // 代表値: 30 s / 80 s / 180 s / 300 s
+  // HCC    125 / 100 /  87 /  82 HU
+  // 血管腫 150 / 140 / 125 / 115 HU
+  // CCC     70 /  85 / 100 / 105 HU
+  // 正常肝  90 / 110 / 100 /  95 HU
   hcc:[[0,0],[8,6],[30,70],[80,45],[180,32],[300,27]],
-  hem:[[0,0],[8,10],[32,95],[100,85],[180,70],[300,60]],
+  hem:[[0,0],[8,10],[30,95],[80,85],[180,70],[300,60]],
   ccc:[[0,0],[8,2],[30,15],[80,30],[180,45],[300,50]],
   liver:[[0,0],[8,5],[30,35],[80,55],[180,45],[300,40]]
 };
 const bloodFracCurves = {
-  // HCC: early arterial hypervascularity with later washout; limited but visible EES spread.
-  hcc:[[0,1],[30,0.60],[80,0.46],[180,0.38],[300,0.34]],
-  // Hemangioma: overwhelmingly intravascular (blood-pool behavior).
-  hem:[[0,1],[30,1.000],[100,0.998],[300,0.995]],
-  // CCC: delayed enhancement from broad fibrous stroma, but vessels should not look empty.
-  ccc:[[0,1],[30,0.42],[80,0.25],[180,0.18],[300,0.15]]
+  // HCC: arterial hypervascularity; later phases remain partly intravascular
+  // but progressively shift toward EES while total enhancement washes out.
+  hcc:[[0,1],[30,0.62],[80,0.50],[180,0.42],[300,0.38]],
+  // Hemangioma: essentially blood-pool enhancement in this single-voxel model.
+  hem:[[0,1],[30,1.000],[80,0.998],[180,0.996],[300,0.995]],
+  // CCC: broad fibrous EES dominates delayed enhancement, while vessels retain
+  // a visible minority of particles so vascular spaces do not look empty.
+  ccc:[[0,1],[30,0.45],[80,0.28],[180,0.20],[300,0.16]]
 };
 const totalParticleValue = (tp,t)=>curve(particleCurves[tp],t);
 const bloodParticleValue = (tp,t)=>totalParticleValue(tp,t)*curve(bloodFracCurves[tp],t);
@@ -1477,7 +1478,7 @@ function drawGraph(){
   const L=compact?58:72, R=compact?20:28, T=compact?22:24, B=compact?58:62;
   const phaseBarH=compact?19:21;
   const plotTop=T+phaseBarH+10;
-  const min=35, max=175;
+  const min=50, max=160;
   const X=x=>L+x/300*(W-L-R);
   const Y=y=>plotTop+(max-y)/(max-min)*(H-plotTop-B);
 
@@ -1489,29 +1490,31 @@ function drawGraph(){
   gctx.fillStyle="#fdfdfd";
   gctx.fillRect(L,plotTop,W-L-R,H-plotTop-B);
 
-  // quiet phase header
+  // phase header: representative acquisition timing for liver dynamic CT
   const phaseBands=[
-    [0,40,compact?"動脈":"動脈相","rgba(229,237,247,0.72)"],
-    [40,100,compact?"門脈":"門脈相","rgba(231,240,234,0.72)"],
-    [100,180,compact?"平衡":"平衡相","rgba(239,235,246,0.72)"],
-    [180,300,compact?"遅延":"遅延相","rgba(244,245,247,0.82)"]
+    [22,48,compact?"後期動脈":"後期動脈相","rgba(229,237,247,0.78)"],
+    [64,96,compact?"門脈":"門脈相","rgba(231,240,234,0.78)"],
+    [160,200,compact?"遅延":"遅延相","rgba(239,235,246,0.82)"]
   ];
   phaseBands.forEach(([a,b,label,color])=>{
     const x0=X(a),x1=X(b);
     gctx.fillStyle=color;
     gctx.fillRect(x0,T,x1-x0,phaseBarH);
-    gctx.strokeStyle="rgba(148,163,184,0.28)";
+    gctx.strokeStyle="rgba(148,163,184,0.30)";
     gctx.lineWidth=0.8;
     gctx.strokeRect(x0,T,x1-x0,phaseBarH);
     gctx.fillStyle="#475569";
     gctx.font=(compact?"700 10px ":"700 10.8px ")+"-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
     gctx.textAlign="center";
     gctx.textBaseline="middle";
-    gctx.fillText(label,(x0+x1)/2,T+phaseBarH/2+0.3);
+    gctx.fillText(label,(x0+x1)/2,T+phaseBarH/2-2);
+    gctx.fillStyle="#64748b";
+    gctx.font=(compact?"600 9px ":"600 9.8px ")+"-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif";
+    gctx.fillText(`${Math.round((a+b)/2)}秒`,(x0+x1)/2,T+phaseBarH/2+8);
   });
 
   // restrained horizontal guides
-  [40,60,80,100,120,140,160].forEach(v=>{
+  [60,80,100,120,140,160].forEach(v=>{
     const y=Y(v);
     gctx.strokeStyle="#f0f3f6";
     gctx.lineWidth=0.8;
@@ -1527,8 +1530,8 @@ function drawGraph(){
     gctx.fillText(String(v),L-10,y);
   });
 
-  // x ticks only; no full vertical grid
-  [0,50,100,150,200,250,300].forEach(v=>{
+  // x ticks emphasize representative acquisition timings.
+  [0,35,80,180,300].forEach(v=>{
     const x=X(v);
     gctx.strokeStyle="#cbd5e1";
     gctx.lineWidth=0.9;
@@ -1545,10 +1548,10 @@ function drawGraph(){
     gctx.fillText(String(v),xx,H-B+19);
   });
 
-  // phase boundaries only
-  [40,100,180].forEach(v=>{
+  // representative phase timing lines
+  [35,80,180].forEach(v=>{
     const x=X(v);
-    gctx.strokeStyle="rgba(148,163,184,0.28)";
+    gctx.strokeStyle="rgba(148,163,184,0.34)";
     gctx.lineWidth=0.8;
     gctx.beginPath();
     gctx.moveTo(x,plotTop);
